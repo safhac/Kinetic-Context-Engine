@@ -44,9 +44,14 @@ def start_stream():
             "metadata": {
                 "source_id": "real-camera-01",
                 "timestamp": time.time(),
-                "resolution": "640x480"
+                "resolution": "640x480",
+                "encoding": "base64/jpeg"  # <--- ADDED: Required by server
             },
-            "frame_data": jpg_as_text
+            "frame_data": jpg_as_text,
+            "sensor_data": {                 # <--- ADDED: Required by server
+                "camera_type": "webcam",
+                "fps": 15
+            } 
         }
 
         # 4. Send to API Gateway
