@@ -1,0 +1,33 @@
+
+cd ~/code/pyfiles/KCE-Project
+
+cat <<EOT > .gitignore
+# --- System & IDE ---
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.venv
+.venv/
+env/
+dist/
+build/
+*.egg-info/
+
+# --- Docker & Local Data (CRITICAL) ---
+# Ignore the massive Kafka/Redis data volumes
+data/kafka/
+data/redis/
+
+# Ignore local environment secrets
+.env
+.env.local
+
+# --- Logs ---
+*.log
+logs/
+EOT
