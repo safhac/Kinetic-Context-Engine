@@ -16,7 +16,7 @@ celery_app = Celery(
 # 2. Register your tasks
 # This tells Celery: "Go look in the body-worker folder for a file named tasks.py"
 celery_app.conf.imports = [
-    'body-worker.tasks', 
+    'body_worker.tasks', 
     # 'face-worker.tasks' # Uncomment when you are ready to build the face worker
 ]
 
