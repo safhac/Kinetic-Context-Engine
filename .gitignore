@@ -32,3 +32,6 @@ data/redis/
 *.log
 logs/
 EOT
+
+# test files
+scripts/test.mp4
