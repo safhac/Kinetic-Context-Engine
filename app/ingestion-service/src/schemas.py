@@ -14,6 +14,7 @@ class TelemetryPayload(BaseModel):
     metadata: VideoMetadata
     # Flexible dictionary for raw sensor readings (gyroscope, accelerometer)
     sensor_data: Dict[str, Any] = Field(..., description="Raw sensor readings (gyro, accel)")
+    frame_data: Optional[str] = Field(None, description="Base64 encoded video frame")
 
     # Custom validator to ensure sensor data isn't empty
     @validator('sensor_data')

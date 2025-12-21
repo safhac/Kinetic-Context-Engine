@@ -4,6 +4,8 @@ from typing import Dict, Any, Optional
 import os
 import logging
 
+from .schemas import TelemetryPayload, VideoMetadata
+
 # Initialize Logger
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -18,19 +20,6 @@ TOPIC_NAME = os.getenv("KAFKA_TOPIC", "raw-telemetry")
 # Placeholder for Producer (Initialized on startup)
 producer = None
 
-# --- Schema Validation  ---
-# Prevents malformed data from corrupting downstream models
-class VideoMetadata(BaseModel):
-    source_id: str
-    timestamp: float
-    resolution: str
-    encoding: str
-
-class TelemetryPayload(BaseModel):
-    session_id: str
-    metadata: VideoMetadata
-    # Flexible dict for sensor data (gyro, accel, etc.)
-    sensor_data: Dict[str, Any] 
 
 @app.on_event("startup")
 async def startup_event():
