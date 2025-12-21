@@ -1,12 +1,14 @@
 version: '3.8'
 
 services:
+  # --- INFRASTRUCTURE ---
   kafka:
     image: confluentinc/cp-kafka:latest
     container_name: kce-kafka
     ports:
       - "9092:9092"
     environment:
+      TZ: Asia/Jerusalem
       # KRaft Settings
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
@@ -22,15 +24,24 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
-      # Cluster ID (required for KRaft)
-      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk' 
+      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
     healthcheck:
       test: ["CMD", "kafka-topics", "--list", "--bootstrap-server", "localhost:9092"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-  # Context Engine (Consumer)
+  redis:
+    image: redis:alpine
+    container_name: kce-redis
+    ports:
+      - "6379:6379"
+    environment:
+      TZ: Asia/Jerusalem
+
+  # --- CONSUMERS ---
+  
+  # 1. Telemetry Consumer (Kafka)
   context-engine:
     build:
       context: ../app/context-engine
@@ -39,21 +50,46 @@ services:
       kafka:
         condition: service_healthy
     environment:
+      TZ: Asia/Jerusalem
       KAFKA_BROKER: kafka:29092
       SOURCE_TOPIC: raw_telemetry
       CONSUMER_GROUP: kce-context-group
-    restart: always # Self-healing
+    restart: always
 
-  # Ingestion Service (API Gateway)
+  # 2. Video Worker (Redis/Celery)
+  ai-workers:
+    build:
+      context: ../ai-workers
+      dockerfile: Dockerfile
+    # Command to start the Celery worker
+    command: celery -A main.celery_app worker --loglevel=info
+    volumes:
+      - ../temp_media:/app/media  # Shared Video Storage
+    environment:
+      TZ: Asia/Jerusalem
+      CELERY_BROKER_URL: redis://redis:6379/0
+    depends_on:
+      - redis
+
+  # --- PRODUCER / API ---
+  
   ingestion-service:
     build:
       context: ../app/ingestion-service
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
+    volumes:
+      - ../temp_media:/app/media  # Shared Video Storage
     depends_on:
       kafka:
         condition: service_healthy
+      redis:
+        condition: service_started
     environment:
+      TZ: Asia/Jerusalem
+      # Kafka Config
       KAFKA_BROKER: kafka:29092
       KAFKA_TOPIC: raw_telemetry
+      # Redis Config
+      CELERY_BROKER_URL: redis://redis:6379/0
