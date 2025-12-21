@@ -1,4 +1,6 @@
 fastapi
 uvicorn
-pydantic
-kafka-python
+python-multipart  # Required for UploadFile
+celery            # Required to send tasks
+redis             # Required for Celery broker
+kafka-python      # Keep this if it still logs telemetry to Kafka
