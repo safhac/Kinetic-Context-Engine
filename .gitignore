@@ -33,5 +33,9 @@ data/redis/
 logs/
 EOT
 
+# temp media
+temp_media/*
+temp_media/uploads/
+
 # test files
 scripts/test.mp4
