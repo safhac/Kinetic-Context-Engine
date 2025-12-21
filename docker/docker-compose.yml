@@ -59,8 +59,8 @@ services:
   # 2. Video Worker (Redis/Celery)
   ai-workers:
     build:
-      context: ../ai-workers
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: ai-workers/Dockerfile
     # Command to start the Celery worker
     command: celery -A main.celery_app worker --loglevel=info
     volumes:
