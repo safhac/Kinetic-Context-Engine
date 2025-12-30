@@ -39,3 +39,5 @@ temp_media/uploads/
 
 # test files
 scripts/test.mp4
+concatenate_project_files.py
+*.txt
