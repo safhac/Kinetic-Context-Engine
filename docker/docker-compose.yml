@@ -57,33 +57,33 @@ services:
     restart: always
 
   # 2. Face Worker (Sensation Layer - Kafka Consumer)
-    ai-workers:
-      build:
-        context: ..
-        dockerfile: ai-workers/Dockerfile
-      # CHANGE 1: Run the Kafka Face Worker script instead of Celery
-      command: python face_worker/main.py
+  ai-workers:
+    build:
+      context: ..
+      dockerfile: ai-workers/Dockerfile
+    # CHANGE 1: Run the Kafka Face Worker script instead of Celery
+    command: python face_worker/main.py
+    
+    volumes:
+      - ../temp_media:/app/media
       
-      volumes:
-        - ../temp_media:/app/media
-        
-      environment:
-        TZ: Asia/Jerusalem
-        PYTHONPATH: /app:/app/ai-workers
-        
-        # CHANGE 2: Add Kafka Connection Details
-        KAFKA_BROKER: kafka:29092
-        SOURCE_TOPIC: raw-telemetry
-        DEST_TOPIC: processed-signals
-        
-        # Keep Redis if you plan to use it for state/caching later
-        CELERY_BROKER_URL: redis://redis:6379/0
+    environment:
+      TZ: Asia/Jerusalem
+      PYTHONPATH: /app:/app/ai-workers
+      
+      # CHANGE 2: Add Kafka Connection Details
+      KAFKA_BROKER: kafka:29092
+      SOURCE_TOPIC: raw-telemetry
+      DEST_TOPIC: processed-signals
+      
+      # Keep Redis if you plan to use it for state/caching later
+      CELERY_BROKER_URL: redis://redis:6379/0
 
-      depends_on:
-        redis:
-          condition: service_started
-        kafka:
-          condition: service_healthy
+    depends_on:
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_healthy
 
   # --- PRODUCER / API ---
   
