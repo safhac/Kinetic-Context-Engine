@@ -56,21 +56,34 @@ services:
       CONSUMER_GROUP: kce-context-group
     restart: always
 
-  # 2. Video Worker (Redis/Celery)
-  ai-workers:
-    build:
-      context: ..
-      dockerfile: ai-workers/Dockerfile
-    # Command to start the Celery worker
-    command: celery -A main.celery_app worker --loglevel=info
-    volumes:
-      - ../temp_media:/app/media  # Shared Video Storage
-    environment:
-      TZ: Asia/Jerusalem
-      CELERY_BROKER_URL: redis://redis:6379/0
-      PYTHONPATH: /app:/app/ai-workers  # <--- syntax fixed
-    depends_on:
-      - redis
+  # 2. Face Worker (Sensation Layer - Kafka Consumer)
+    ai-workers:
+      build:
+        context: ..
+        dockerfile: ai-workers/Dockerfile
+      # CHANGE 1: Run the Kafka Face Worker script instead of Celery
+      command: python face_worker/main.py
+      
+      volumes:
+        - ../temp_media:/app/media
+        
+      environment:
+        TZ: Asia/Jerusalem
+        PYTHONPATH: /app:/app/ai-workers
+        
+        # CHANGE 2: Add Kafka Connection Details
+        KAFKA_BROKER: kafka:29092
+        SOURCE_TOPIC: raw-telemetry
+        DEST_TOPIC: processed-signals
+        
+        # Keep Redis if you plan to use it for state/caching later
+        CELERY_BROKER_URL: redis://redis:6379/0
+
+      depends_on:
+        redis:
+          condition: service_started
+        kafka:
+          condition: service_healthy
 
   # --- PRODUCER / API ---
   
