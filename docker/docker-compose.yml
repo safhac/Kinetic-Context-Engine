@@ -73,7 +73,7 @@ services:
       PYTHONUNBUFFERED: 1
       # CHANGE 2: Add Kafka Connection Details
       KAFKA_BROKER: kafka:29092
-      SOURCE_TOPIC: raw-telemetry
+      SOURCE_TOPIC: raw_telemetry
       DEST_TOPIC: processed-signals
       
       # Keep Redis if you plan to use it for state/caching later
