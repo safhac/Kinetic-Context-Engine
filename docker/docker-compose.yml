@@ -52,7 +52,7 @@ services:
     environment:
       TZ: Asia/Jerusalem
       KAFKA_BROKER: kafka:29092
-      SOURCE_TOPIC: raw_telemetry
+      SOURCE_TOPIC: processed_signals
       CONSUMER_GROUP: kce-context-group
     restart: always
 

@@ -41,3 +41,4 @@ temp_media/uploads/
 scripts/test.mp4
 concatenate_project_files.py
 *.txt
+requirements.txt
