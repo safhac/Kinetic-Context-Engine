@@ -62,7 +62,7 @@ services:
       context: ..
       dockerfile: ai-workers/Dockerfile
     # CHANGE 1: Run the Kafka Face Worker script instead of Celery
-    command: python face_worker/main.py
+    command: python ai-workers/face_worker/main.py
     
     volumes:
       - ../temp_media:/app/media
