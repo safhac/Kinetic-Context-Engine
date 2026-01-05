@@ -1,146 +1,131 @@
 import os
 import json
-import time
-import base64
 import logging
-import cv2
-import numpy as np
-import mediapipe as mp
-from kafka import KafkaConsumer
-from kafka.errors import NoBrokersAvailable
+import sys
+from kafka import KafkaConsumer, KafkaProducer
 
-# --- Configuration ---
+# 1. Setup Logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+logger = logging.getLogger("kce-context-engine")
+
+# 2. Configuration
 KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:9092")
-SOURCE_TOPIC = os.getenv("SOURCE_TOPIC", "raw_telemetry")
-CONSUMER_GROUP = os.getenv("CONSUMER_GROUP", "kce-context-group")
-LAG_THRESHOLD_SEC = 0.5  # Skip frames older than 0.5s to prevent backlog
+SOURCE_TOPIC = os.getenv("SOURCE_TOPIC", "processed_signals") # Input from Workers
+DEST_TOPIC = os.getenv("DEST_TOPIC", "interpreted_context")   # Output to App
 
-# --- Logging Setup ---
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-logger = logging.getLogger("context-engine")
+class RulesEngine:
+    """
+    The Semantic Brain.
+    Maps atomic signals (e.g., 'eyebrow_raise') to Meaning (e.g., 'Friendliness').
+    """
+    def __init__(self, rules_path="src/rules.json"):
+        try:
+            with open(rules_path, 'r') as f:
+                self.rules = json.load(f)
+            logger.info(f"🧠 Knowledge Base Loaded: {len(self.rules)} rules active.")
+        except Exception as e:
+            logger.error(f"❌ Failed to load rules: {e}")
+            self.rules = []
 
-# --- Robust MediaPipe Initialization ---
-# We wrap this in a try-except block so the container doesn't crash 
-# if it fails to get a GPU context (common EGL error in Docker).
-try:
-    mp_face_mesh = mp.solutions.face_mesh
-    mp_pose = mp.solutions.pose
+    def evaluate(self, signals):
+        interpretations = []
+        # Convert list of signals to a quick-lookup dictionary: {'signal_name': intensity}
+        detected_map = {s['signal']: s.get('intensity', 1.0) for s in signals}
 
-    face_mesh = mp_face_mesh.FaceMesh(
-        static_image_mode=False,
-        max_num_faces=1,
-        refine_landmarks=True,
-        min_detection_confidence=0.5
-    )
-    pose = mp_pose.Pose(
-        static_image_mode=False,
-        model_complexity=1,
-        min_detection_confidence=0.5
-    )
-    logger.info("✅ MediaPipe Models Loaded Successfully")
-except Exception as e:
-    logger.error(f"❌ MediaPipe Failed to Load (Running in limited mode): {e}")
-    face_mesh = None
-    pose = None
+        for rule in self.rules:
+            # Logic: ALL triggers in the rule must be present in the detected signals
+            # Example: Rule "Turtling" requires "shoulders_up" AND "head_down"
+            triggers = rule.get('triggers', [])
+            if not triggers: continue
 
-def decode_frame(base64_string):
-    """Converts Base64 string back to OpenCV image."""
+            if all(t in detected_map for t in triggers):
+                # Calculate average intensity
+                avg_intensity = sum(detected_map[t] for t in triggers) / len(triggers)
+                
+                # Check threshold
+                if avg_intensity >= rule.get('threshold', 0.0):
+                    interpretations.append({
+                        "meaning": rule['meaning'],
+                        "code": rule.get('rule_code', 'unknown'),
+                        "confidence": avg_intensity,
+                        "triggers": triggers
+                    })
+        return interpretations
+
+def main():
+    logger.info("🚀 Context Engine Starting...")
+    
+    # 3. Initialize Kafka Consumer (The Listener)
+    # We use 'group_id' to ensure we are a persistent consumer.
     try:
-        img_bytes = base64.b64decode(base64_string)
-        nparr = np.frombuffer(img_bytes, np.uint8)
-        return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        consumer = KafkaConsumer(
+            SOURCE_TOPIC,
+            bootstrap_servers=KAFKA_BROKER,
+            group_id="kce-context-group-v1",
+            auto_offset_reset='earliest', # Important: Read from start if we missed data
+            value_deserializer=lambda m: json.loads(m.decode('utf-8'))
+        )
+        logger.info(f"✅ Consumer connected to {SOURCE_TOPIC}")
     except Exception as e:
-        logger.error(f"Frame decoding failed: {e}")
-        return None
-
-def process_frame(frame, session_id, timestamp):
-    """
-    Orchestrates MediaPipe Inference.
-    """
-    if not face_mesh or not pose:
-        logger.warning("Skipping processing: AI models not loaded.")
+        logger.critical(f"❌ Failed to connect Consumer: {e}")
         return
 
+    # 4. Initialize Kafka Producer (The Speaker)
     try:
-        # MediaPipe requires RGB
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        
-        # 1. Face Mesh Analysis (The Face Recognition Logic)
-        face_results = face_mesh.process(frame_rgb)
-        face_count = 0
-        if face_results.multi_face_landmarks:
-            face_count = len(face_results.multi_face_landmarks)
-
-        # 2. Pose Analysis
-        pose_results = pose.process(frame_rgb)
-        pose_detected = "Yes" if pose_results.pose_landmarks else "No"
-
-        # Calculate processing lag for observability
-        process_lag = time.time() - timestamp
-        
-        logger.info(f"Session: {session_id} | Face: {face_count} | Pose: {pose_detected} | Lag: {process_lag:.3f}s")
-
+        producer = KafkaProducer(
+            bootstrap_servers=KAFKA_BROKER,
+            value_serializer=lambda v: json.dumps(v).encode('utf-8')
+        )
+        logger.info(f"✅ Producer connected. Broadcasting to {DEST_TOPIC}")
     except Exception as e:
-        logger.error(f"Inference Error: {e}")
+        logger.critical(f"❌ Failed to connect Producer: {e}")
+        return
 
-def start_consumer():
-    logger.info(f"Connecting to {KAFKA_BROKER}...")
-    
-    # Resilience: Retry Loop
-    consumer = None
-    while not consumer:
-        try:
-            consumer = KafkaConsumer(
-                SOURCE_TOPIC,
-                bootstrap_servers=KAFKA_BROKER,
-                group_id=CONSUMER_GROUP,
-                value_deserializer=lambda m: json.loads(m.decode('utf-8')),
-                auto_offset_reset='latest',  # Start at the end of the queue
-                enable_auto_commit=False     # CRITICAL: Manual commits enabled
-            )
-            logger.info("✅ Connected to Kafka Bus.")
-        except NoBrokersAvailable:
-            logger.warning("⏳ Waiting for Kafka... Retrying in 2s")
-            time.sleep(2)
+    # 5. Initialize Brain
+    brain = RulesEngine()
 
-    # --- Main Event Loop ---
-    print("🎧 Consumer Ready. Waiting for frames...", flush=True)
+    # 6. Main Processing Loop
+    logger.info("🧠 Waiting for signals...")
     
     for message in consumer:
-        
-        
         try:
             payload = message.value
             
-            # 1. Extract Metadata (RESTORED)
-            metadata = payload.get("metadata", {})
-            session_id = payload.get("session_id", "unknown")
-            timestamp = metadata.get("timestamp", time.time())
+            # Extract basic info
+            session_id = payload.get("session_id")
+            signals = payload.get("signals", [])
             
-            # 2. Latency Governance (Skip-Frame Logic) (RESTORED)
-            # current_lag = time.time() - timestamp
-            
-            # if current_lag > LAG_THRESHOLD_SEC:
-            #     logger.warning(f"⏩ High Lag ({current_lag:.3f}s). Skipping frame to recover.")
-            #     # We commit this offset to mark it as "handled" (skipped) so we don't read it again
-            #     consumer.commit() 
-            #     continue
+            if not signals:
+                continue
 
-            # 3. Decode & Process
-            frame_data = payload.get("frame_data")
-            if frame_data:
-                img = decode_frame(frame_data)
-                if img is not None:
-                    process_frame(img, session_id, timestamp)
+            # --- STEP A: PERCEIVE ---
+            meanings = brain.evaluate(signals)
 
-            # 4. Atomic Commit (RESTORED)
-            # Only commit after successful processing to ensure At-Least-Once delivery
-            consumer.commit() 
-            
+            if meanings:
+                # --- STEP B: INTERPRET ---
+                output_payload = {
+                    "session_id": session_id,
+                    "timestamp": payload.get("timestamp"),
+                    "context": meanings,
+                    "meta": {
+                        "engine_version": "2.0",
+                        "source_signals": len(signals)
+                    }
+                }
+
+                # --- STEP C: BROADCAST ---
+                producer.send(DEST_TOPIC, output_payload)
+                
+                # Log the "Thought"
+                for m in meanings:
+                    logger.info(f"💡 [Session: {session_id[:8]}] Detected: {m['meaning']} (Confidence: {m['confidence']:.2f})")
+
         except Exception as e:
-            logger.error(f"Consumer loop error: {e}")
-            # Optional: Decide if you want to commit on error or retry
-            # consumer.commit() 
+            logger.error(f"⚠️ Error processing message: {e}")
 
 if __name__ == "__main__":
-    start_consumer()
+    main()
