@@ -74,7 +74,7 @@ services:
       # CHANGE 2: Add Kafka Connection Details
       KAFKA_BROKER: kafka:29092
       SOURCE_TOPIC: raw_telemetry
-      DEST_TOPIC: processed-signals
+      DEST_TOPIC: processed_signals
       
       # Keep Redis if you plan to use it for state/caching later
       CELERY_BROKER_URL: redis://redis:6379/0
