@@ -70,7 +70,7 @@ services:
     environment:
       TZ: Asia/Jerusalem
       PYTHONPATH: /app:/app/ai-workers
-      
+      PYTHONUNBUFFERED: 1
       # CHANGE 2: Add Kafka Connection Details
       KAFKA_BROKER: kafka:29092
       SOURCE_TOPIC: raw-telemetry
