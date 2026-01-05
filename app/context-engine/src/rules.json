@@ -1,0 +1,23 @@
+[
+  {
+    "id": "ctx_001",
+    "meaning": "Surprise / Curiosity",
+    "triggers": ["eyebrow_raise"],
+    "threshold": 0.5,
+    "priority": 1
+  },
+  {
+    "id": "ctx_002",
+    "meaning": "Requesting Attention",
+    "triggers": ["hand_raise"],
+    "threshold": 0.9,
+    "priority": 2
+  },
+  {
+    "id": "ctx_003",
+    "meaning": "Urgent Stop",
+    "triggers": ["hand_raise", "eyebrow_raise"],
+    "threshold": 0.5,
+    "priority": 10
+  }
+]
