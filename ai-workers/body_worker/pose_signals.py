@@ -1,289 +1,313 @@
 import math
 
-# A dictionary to hold state between frames.
-# In a real distributed system, this would be Redis, but for a worker process,
-# a global or class-level dict works perfectly fine for sequential frames.
+# --- State Storage ---
 _pose_history = {
     "throat_y": [],
-    "left_ankle_y": [],
-    "right_ankle_y": [],
-    "left_ankle_pos": [],  # Stores tuples (x, y, z)
-    "right_ankle_pos": []
+    "left_ankle_pos": [],   # Stores tuples (x, y, z)
+    "right_ankle_pos": [],
+    "left_wrist_y": []      # For baton gestures
 }
 
+# --- Main Signal Aggregator ---
+
+
+def get_active_pose_signals(pose_landmarks, object_centroids=None, other_property_bounds=None, audio_input=None):
+    """
+    Checks ALL implemented signals against the current frame.
+    Args:
+        pose_landmarks: MediaPipe Pose landmarks.
+        object_centroids: List of (x,y,z) tuples for external objects (optional).
+        other_property_bounds: Dict {'x_min', ...} for property interaction (optional).
+        audio_input: Audio rhythm data for sync detection (optional).
+    """
+    signals = []
+    lm = pose_landmarks.landmark
+
+    # --- Basic Posture ---
+    if detect_head_downcast(pose_landmarks):
+        signals.append("head_down")
+
+    shrug = detect_shoulder_shrug(pose_landmarks)
+    if shrug:
+        signals.append(shrug)
+
+    # --- Hand/Arm Gestures ---
+    if detect_protecting_gesture(pose_landmarks):
+        signals.append("arms_crossed")
+    if detect_steepling(pose_landmarks):
+        signals.append("steepling")
+    if detect_elbow_closure(pose_landmarks):
+        signals.append("elbow_closure")
+    if detect_ventilation(pose_landmarks):
+        signals.append("ventilation")
+    if detect_security_check(pose_landmarks):
+        signals.append("security_check")
+
+    # --- Leg/Foot Gestures ---
+    if detect_foot_withdrawal(pose_landmarks):
+        signals.append("foot_withdrawal")
+    if detect_binding_legs(pose_landmarks):
+        signals.append("binding_legs")
+    if detect_inward_toe_pointing(pose_landmarks):
+        signals.append("inward_toe_pointing")
+
+    # --- Rhythmic/Micro Expressions ---
+    if detect_adams_apple_jump(pose_landmarks):
+        signals.append("adams_apple_jump")
+
+    if detect_baton_gestures(pose_landmarks):
+        signals.append("baton_gesture")
+        # Advanced: Check sync if audio is provided
+        if audio_input and detect_asynchronous_baton(pose_landmarks, audio_input):
+            signals.append("async_baton_gesture")
+
+    # --- Interaction with Environment ---
+    if object_centroids and detect_object_barrier(pose_landmarks, object_centroids):
+        signals.append("object_barrier")
+
+    if other_property_bounds and detect_property_interaction(pose_landmarks, other_property_bounds):
+        signals.append("interaction_others_property")
+
+    # --- Status Indicators ---
+    # Pelvic Tilt returns a specific state string
+    tilt = detect_pelvic_tilt(pose_landmarks)
+    if tilt:
+        signals.append(f"pelvic_tilt_{tilt}")
+
+    # Generic Hand Raise (Wrist higher than Nose)
+    if lm[15].y < lm[0].y:
+        signals.append("hand_raise")
+
+    return signals
+
+
+# --- Helpers ---
 
 def is_inside(point, bounds):
-    """
-    Checks if a MediaPipe landmark is inside a bounding box.
-    Args:
-        point: A landmark object (with .x, .y attributes).
-        bounds: A dict with {'x_min', 'y_min', 'x_max', 'y_max'} 
-                (values between 0.0 and 1.0).
-    """
+    """Checks if a point is inside a bounding box dict."""
     if not bounds:
         return False
-
     return (bounds['x_min'] <= point.x <= bounds['x_max']) and \
            (bounds['y_min'] <= point.y <= bounds['y_max'])
 
 
+def _dist(p1, p2):
+    """Euclidean distance ignoring Z depth"""
+    return math.sqrt((p1.x - p2.x)**2 + (p1.y - p2.y)**2)
+
+
 def detect_sudden_velocity(landmark, history_key, threshold=0.05):
-    """
-    Detects high-velocity movement in any direction.
-    Args:
-        landmark: The MediaPipe landmark object.
-        history_key: String key to store history (e.g., 'left_ankle_pos').
-        threshold: Distance moved per frame (0.05 is ~5% of screen width).
-    """
-    # 1. Get History
+    """Detects high-velocity movement in 3D space."""
     history = _pose_history.get(history_key, [])
-
-    # 2. Store current position
     current_pos = (landmark.x, landmark.y, landmark.z)
-    history.append(current_pos)
 
-    # Keep strictly last 2 frames for instantaneous velocity
+    history.append(current_pos)
     if len(history) > 2:
         history.pop(0)
     _pose_history[history_key] = history
 
-    # 3. Calculate Velocity
     if len(history) < 2:
         return False
 
-    prev = history[0]
-    curr = history[1]
-
-    # Euclidean distance formula (3D)
-    dist = math.sqrt(
-        (curr[0] - prev[0])**2 +
-        (curr[1] - prev[1])**2 +
-        (curr[2] - prev[2])**2
-    )
-
+    prev, curr = history[0], history[1]
+    dist = math.sqrt((curr[0]-prev[0])**2 +
+                     (curr[1]-prev[1])**2 + (curr[2]-prev[2])**2)
     return dist > threshold
 
 
 def detect_vertical_surge(pose_landmarks, area="throat", threshold=0.015):
-    """
-    Detects a sudden upward movement (surge) in a specific body area.
-    Returns True if a surge occurred compared to recent history.
-    """
+    """Detects a sudden upward movement (surge) in a specific body area."""
     landmarks = pose_landmarks.landmark
     current_y = 0.0
     history_key = ""
 
-    # 1. Determine the target Y coordinate based on 'area'
     if area == "throat":
-        # Approximate Adam's Apple: Midpoint between shoulders (11, 12)
-        # We assume the neck moves with the shoulders/head.
-        # Ideally, we'd use face landmark 152 (chin) + offset, but we are in Body Worker.
+        # Midpoint of shoulders approximates neck/throat base
         current_y = (landmarks[11].y + landmarks[12].y) / 2
         history_key = "throat_y"
-    elif area == "ankle_left":
-        current_y = landmarks[27].y
-        history_key = "left_ankle_y"
 
-    # 2. Retrieve History
     history = _pose_history.get(history_key, [])
-
-    # 3. Update History (Keep last 5 frames for smoothing or immediate comparison)
     history.append(current_y)
+
+    # Keep history short for immediate comparison
     if len(history) > 5:
         history.pop(0)
     _pose_history[history_key] = history
 
-    # 4. Check for Surge (Logic: Previous - Current > Threshold)
-    # Note: In MediaPipe, Y=0 is TOP. So "Upward" movement means Y decreases.
-    # Therefore: (Old_Y - New_Y) should be POSITIVE.
-
     if len(history) < 2:
         return False
 
-    # Compare current frame vs the average of the last 3 frames (to reduce jitter)
+    # Compare current frame vs average of previous frames to reduce jitter
     previous_avg = sum(history[:-1]) / len(history[:-1])
-
-    diff = previous_avg - current_y  # Positive if moving UP
-
+    diff = previous_avg - current_y  # Positive if moving UP (Y decreases)
     return diff > threshold
 
 
-def detect_adams_apple_jump(pose_landmarks):
-    # Detects sudden rise of the throat area
-    # We use a threshold of 0.015 (approx 1.5% of screen height)
-    if detect_vertical_surge(pose_landmarks, area="throat", threshold=0.015):
-        return True
-    return False
+def detect_rhythmic_punctuation(landmark, history_key="left_wrist_y"):
+    """Detects rapid up/down oscillation of wrist (Baton gestures)."""
+    history = _pose_history.get(history_key, [])
+    history.append(landmark.y)
+    if len(history) > 20:
+        history.pop(0)
+    _pose_history[history_key] = history
 
-
-def detect_foot_withdrawal(pose_landmarks):
-    # Doc #91: Sudden withdrawal of feet under a chair.
-    # Logic: High-velocity movement of ankles.
-    # We check both ankles.
-    left_move = detect_sudden_velocity(
-        pose_landmarks.landmark[27], "left_ankle_pos", threshold=0.05
-    )
-    right_move = detect_sudden_velocity(
-        pose_landmarks.landmark[28], "right_ankle_pos", threshold=0.05
-    )
-
-    return left_move or right_move
-
-
-def detect_patting_motion(hand_landmark, hip_landmark):
-    """
-    Detects if a hand is hovering near a hip and moving slightly.
-    """
-    # 1. Proximity Check (Is hand near pocket?)
-    # Distance between wrist and hip
-    dist = math.sqrt(
-        (hand_landmark.x - hip_landmark.x)**2 +
-        (hand_landmark.y - hip_landmark.y)**2
-    )
-
-    # If hand is not near hip (0.15 radius), ignore
-    if dist > 0.15:
+    if len(history) < 20:
         return False
 
-    # 2. Movement Check
-    # We can reuse 'detect_sudden_velocity' with a LOWER threshold
-    # to detect the "jitter" of patting, or just return True for "Hand on Hip"
-    # For MVP, let's detect "Hand touching Hip/Pocket area"
-    return True
+    # Count zero crossings in velocity
+    velocities = [history[i] - history[i-1] for i in range(1, len(history))]
+    flips = 0
+    for i in range(1, len(velocities)):
+        if (velocities[i] > 0 and velocities[i-1] < 0) or \
+           (velocities[i] < 0 and velocities[i-1] > 0):
+            if abs(velocities[i]) > 0.01:  # Threshold to ignore noise
+                flips += 1
 
+    return flips > 3  # At least 3 directional changes in ~0.6s
+
+
+# --- Signal Implementations ---
 
 def detect_head_downcast(pose_landmarks):
-    # Head lowered relative to shoulder line [cite: 54, 68]
+    # Head lowered relative to shoulder line
     nose = pose_landmarks.landmark[0]
     avg_shoulder_y = (
         pose_landmarks.landmark[11].y + pose_landmarks.landmark[12].y) / 2
-    return nose.y > (avg_shoulder_y - 0.05)
-
-
-def detect_ventilation(pose_landmarks):
-    # Logic: Hand (15 or 16) moves to neck/collar (11, 12)
-    # followed by outward movement to 'pull' clothing [cite: 125]
-    left_hand = pose_landmarks.landmark[15]
-    collar_area = (
-        pose_landmarks.landmark[11].y + pose_landmarks.landmark[12].y) / 2
-    return abs(left_hand.y - collar_area) < 0.05
-
-
-def detect_adams_apple_jump(pose_landmarks):
-    # Requires high-resolution tracking of the throat area (Landmark 0 in some models)
-    # Associated with the reticular activating system and stress [cite: 131, 132]
-    return detect_vertical_surge(pose_landmarks, area="throat")
-
-
-def detect_baton_gestures(pose_landmarks):
-    # Detects hand motions that accentuate syllabic/emotional punctuation.
-    # Measures the frequency and rhythm of wrist movement (15, 16).
-    return detect_rhythmic_punctuation(pose_landmarks.landmark[15])
-
-
-def detect_asynchronous_baton(pose_landmarks, audio_input):
-    # Logic: Compares baton rhythm with speech rhythm.
-    # A gap indicates the emotion is likely not genuine[cite: 141, 143].
-    return not is_rhythm_synced(pose_landmarks.landmark[15], audio_input)
+    return nose.y > (avg_shoulder_y - 0.1)
 
 
 def detect_shoulder_shrug(pose_landmarks):
-    # Measures sudden vertical rise of shoulders (11, 12) relative to the neck.
-    # Can be Double (Doc #29) or Single (Doc #38).
-    left_y = pose_landmarks.landmark[11].y
-    right_y = pose_landmarks.landmark[12].y
-    # Logic: Significant upward shift from baseline
-    is_left_up = left_y < (baseline_y - 0.05)
-    is_right_up = right_y < (baseline_y - 0.05)
+    # Measures rise of shoulders relative to nose
+    lm = pose_landmarks.landmark
+    nose_y = lm[0].y
+    left_dist = abs(lm[11].y - nose_y)
+    right_dist = abs(lm[12].y - nose_y)
 
-    if is_left_up and is_right_up:
+    # Threshold: smaller distance means shoulders went UP
+    threshold = 0.12
+    is_left = left_dist < threshold
+    is_right = right_dist < threshold
+
+    if is_left and is_right:
         return "double_shrug"
-    if is_left_up or is_right_up:
+    if is_left or is_right:
         return "single_shrug"
     return None
 
 
 def detect_protecting_gesture(pose_landmarks):
-    # Limbs crossing over the body to cover vital areas (Doc #35).
-    # Check if wrists (15, 16) cross the torso mid-line.
-    return is_crossing_torso(pose_landmarks.landmark[15], pose_landmarks.landmark[16])
-
-
-def detect_elbow_closure(pose_landmarks):
-    # Measures the inward drawing of the elbows while seated (Doc #37).
-    left_elbow = pose_landmarks.landmark[13]
-    right_elbow = pose_landmarks.landmark[14]
-    # Logic: Elbows move closer together toward the mid-line.
-    return abs(left_elbow.x - right_elbow.x) < 0.2
+    # Arm crossing: Wrist crossing the midline of the body
+    lm = pose_landmarks.landmark
+    mid_x = (lm[11].x + lm[12].x) / 2
+    # Check if either wrist has crossed the center X coordinate
+    return (lm[15].x < mid_x) or (lm[16].x > mid_x)
 
 
 def detect_steepling(pose_landmarks):
-    # Palms face each other with fingertips touching (Doc #47).
-    l_fingers = [pose_landmarks.landmark[i] for i in [17, 19, 21]]
-    r_fingers = [pose_landmarks.landmark[i] for i in [18, 20, 22]]
-    # Logic: Proximity between corresponding left/right fingertips.
-    return is_fingertip_contact(l_fingers, r_fingers)
+    # Fingertips touching (Index fingers 19, 20)
+    lm = pose_landmarks.landmark
+    return _dist(lm[19], lm[20]) < 0.05
+
+
+def detect_elbow_closure(pose_landmarks):
+    # Elbows drawn in toward body
+    lm = pose_landmarks.landmark
+    dist = _dist(lm[13], lm[14])
+    # Threshold depends on body size, but < 0.3 is generally tight
+    return dist < 0.3
+
+
+def detect_ventilation(pose_landmarks):
+    # Pulling shirt collar: Hand near neck moving outward
+    lm = pose_landmarks.landmark
+    collar_area_y = (lm[11].y + lm[12].y) / 2
+    l_hand = lm[15]
+    # Hand near neck Y-level AND inside shoulder width
+    return abs(l_hand.y - collar_area_y) < 0.1 and l_hand.x < lm[11].x
+
+
+def detect_security_check(pose_landmarks):
+    # Checking pockets/hips
+    lm = pose_landmarks.landmark
+    # Check proximity of wrists (15, 16) to hips (23, 24)
+    left_check = _dist(lm[15], lm[23]) < 0.15
+    right_check = _dist(lm[16], lm[24]) < 0.15
+    return left_check or right_check
+
+
+def detect_foot_withdrawal(pose_landmarks):
+    # Sudden movement of ankles
+    left_move = detect_sudden_velocity(
+        pose_landmarks.landmark[27], "left_ankle_pos", 0.05)
+    right_move = detect_sudden_velocity(
+        pose_landmarks.landmark[28], "right_ankle_pos", 0.05)
+    return left_move or right_move
 
 
 def detect_binding_legs(pose_landmarks):
-    # Legs come together with no relaxation, often feet touching (Doc #83).
-    left_ankle = pose_landmarks.landmark[27]
-    right_ankle = pose_landmarks.landmark[28]
-    return abs(left_ankle.x - right_ankle.x) < 0.05
+    # Ankles locked together
+    lm = pose_landmarks.landmark
+    return _dist(lm[27], lm[28]) < 0.1
+
+
+def detect_inward_toe_pointing(pose_landmarks):
+    # Toes pointing inward
+    lm = pose_landmarks.landmark
+    # Vector: Heel to Foot Index
+    l_toe_vec = lm[31].x - lm[29].x
+    r_toe_vec = lm[32].x - lm[30].x
+    # Left toe points Right (>0), Right toe points Left (<0)
+    return l_toe_vec > 0 and r_toe_vec < 0
+
+
+def detect_pelvic_tilt(pose_landmarks):
+    # Forward (confidence) vs Backward (retreat)
+    lm = pose_landmarks.landmark
+    mid_hip_z = (lm[23].z + lm[24].z) / 2
+    mid_shoulder_z = (lm[11].z + lm[12].z) / 2
+    return "forward" if mid_hip_z < mid_shoulder_z else "backward"
+
+
+def detect_adams_apple_jump(pose_landmarks):
+    # Sudden rise of the throat area
+    return detect_vertical_surge(pose_landmarks, area="throat")
+
+
+def detect_baton_gestures(pose_landmarks):
+    # Rhythmic hand beating
+    return detect_rhythmic_punctuation(pose_landmarks.landmark[15])
+
+
+def detect_asynchronous_baton(pose_landmarks, audio_input):
+    # Placeholder logic: Compares baton rhythm with speech rhythm.
+    # Returns True if NOT synced.
+    #
+    is_moving = detect_rhythmic_punctuation(pose_landmarks.landmark[15])
+    # Assume audio_input has property .is_speaking or .amplitude
+    # This is a stub for the logic described in File 1
+    if is_moving and audio_input and not audio_input.is_speaking:
+        return True
+    return False
 
 
 def detect_object_barrier(pose_landmarks, object_centroids):
-    # Doc #100: Putting objects between subject and interviewer.
-    # Logic: An object (e.g., cup, book) is detected in the 'dead zone'
-    # between the subject's torso and the camera.
+    # Object placed between subject and camera
     torso_z = pose_landmarks.landmark[1].z
     for obj in object_centroids:
-        if obj.z < torso_z and is_in_front_of_chest(obj, pose_landmarks):
-            return True
+        # Check if object Z is closer to camera than torso Z
+        if obj.z < torso_z:
+            # Simplified "in front" check: Object X is within shoulder width
+            shoulders_min_x = min(
+                pose_landmarks.landmark[11].x, pose_landmarks.landmark[12].x)
+            shoulders_max_x = max(
+                pose_landmarks.landmark[11].x, pose_landmarks.landmark[12].x)
+            if shoulders_min_x < obj.x < shoulders_max_x:
+                return True
     return False
 
 
 def detect_property_interaction(pose_landmarks, other_property_bounds):
-    # Doc #93: Physical interaction with property belonging to others.
-    # Logic: Wrist (15, 16) enters the bounding box of someone else's property.
-    left_hand = pose_landmarks.landmark[15]
-    if is_inside(left_hand, other_property_bounds):
-        return "signal_interaction_others_property"
-    return None
-
-
-def detect_security_check(pose_landmarks):
-    # Doc #103: Checking safety of personal items (pockets).
-    # Check Left Hand vs Left Hip (23) AND Right Hand vs Right Hip (24)
-    lm = pose_landmarks.landmark
-
-    left_check = detect_patting_motion(lm[15], lm[23])
-    right_check = detect_patting_motion(lm[16], lm[24])
-
-    return left_check or right_check
-
-
-def detect_pelvic_tilt(pose_landmarks):
-    # Doc #59: Forward tilt (confidence) vs backward tilt (lack of confidence).
-    # Logic: Angle between hip (23, 24) and shoulder (11, 12) on Z-axis.
-    mid_hip_z = (pose_landmarks.landmark[23].z +
-                 pose_landmarks.landmark[24].z) / 2
-    mid_shoulder_z = (
-        pose_landmarks.landmark[11].z + pose_landmarks.landmark[12].z) / 2
-    return "forward" if mid_hip_z < mid_shoulder_z else "backward"
-
-
-def detect_inward_toe_pointing(pose_landmarks):
-    # Doc #88: Toes point inward (pigeon-toed).
-    # Logic: Orientation of the vector between heel (29, 30) and index toe (31, 32).
-    left_toe_vec = pose_landmarks.landmark[31].x - \
-        pose_landmarks.landmark[29].x
-    right_toe_vec = pose_landmarks.landmark[32].x - \
-        pose_landmarks.landmark[30].x
-    return left_toe_vec > 0 and right_toe_vec < 0
-
-
-def detect_foot_withdrawal(pose_landmarks):
-    # Doc #91: Sudden withdrawal of feet under a chair.
-    # Logic: High-velocity negative Z/Y shift of ankles (27, 28) while seated.
-    return detect_sudden_velocity(pose_landmarks.landmark[27], direction="back")
+    # Wrist entering someone else's space
+    if is_inside(pose_landmarks.landmark[15], other_property_bounds):
+        return True
+    return False
