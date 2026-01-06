@@ -97,7 +97,7 @@ services:
     
   ai-worker-audio:
       build:
-        context: .
+        context: ../
         dockerfile: ai-workers/audio_worker/Dockerfile
       environment:
         KAFKA_BROKER: kafka:29092
