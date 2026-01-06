@@ -103,7 +103,7 @@ services:
         KAFKA_BROKER: kafka:29092
         SOURCE_TOPIC: raw_audio_chunk
         DEST_TOPIC: processed_signals
-        PYTHONPATH: /app:/app/ai-workers/audio_worker
+        PYTHONPATH: /app/context-engine:/app/context-engine/src
       depends_on:
         kafka:
           condition: service_healthy
