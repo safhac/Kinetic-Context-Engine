@@ -18,20 +18,31 @@ class MediaPipeFaceSensor(SensorInterface):
 
     def process_frame(self, frame: np.ndarray, timestamp: float) -> List[Dict[str, Any]]:
         results = []
+
+        # 1. Convert to RGB for MediaPipe
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         processed = self.face_mesh.process(rgb_frame)
 
         if processed.multi_face_landmarks:
             for face_landmarks in processed.multi_face_landmarks:
-                # NEW WAY (Using your new file):
-                # Pass the raw landmarks to the new library
-                detected_signals = detect_face_gestures(face_landmarks)
 
-                # Add timestamp and source
-                for signal in detected_signals:
-                    signal['timestamp'] = timestamp
-                    signal['source'] = 'mediapipe_face'
-                    results.append(signal)
+                # 2. CALL SIGNAL DETECTION WITH FRAME
+                # We pass 'frame' (the original BGR image) for color analysis
+                # We pass 'pose_landmarks=None' because this worker doesn't have body data yet
+                active_signals = get_active_face_signals(
+                    face_landmarks=face_landmarks,
+                    pose_landmarks=None,
+                    frame=frame
+                )
+
+                # 3. Format Output
+                for signal_name in active_signals:
+                    results.append({
+                        "signal": signal_name,
+                        "intensity": 1.0,
+                        "timestamp": timestamp,
+                        "source": "mediapipe_face_mesh"
+                    })
 
         return results
 
