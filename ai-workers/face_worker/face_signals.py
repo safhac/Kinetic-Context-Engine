@@ -89,6 +89,51 @@ def detect_head_downcast(face_landmarks, pose_landmarks):
 # Simplified EAR logic
 
 
+def detect_iris_center_ratio(face_landmarks, mode="horizontal"):
+    """
+    Calculates the position of the iris relative to the eye corners.
+    Used for 'Confirmation Glance'  and 'Facing' logic.
+
+    Returns:
+        0.5 = Centered (Looking straight)
+        0.0 = Looking far Left (Subject's right)
+        1.0 = Looking far Right (Subject's left)
+    """
+    lm = face_landmarks.landmark
+
+    # Left Eye Landmarks (MediaPipe Face Mesh)
+    # 468 = Iris Center
+    # 33 = Inner Corner, 133 = Outer Corner
+    iris_center = lm[468]
+    inner_corner = lm[33]
+    outer_corner = lm[133]
+
+    if mode == "horizontal":
+        # Calculate eye width
+        eye_width = abs(outer_corner.x - inner_corner.x)
+        if eye_width == 0:
+            return 0.5
+
+        # Calculate distance of iris from inner corner
+        dist_to_inner = abs(iris_center.x - inner_corner.x)
+
+        # Ratio: 0 (Inner) to 1 (Outer)
+        ratio = dist_to_inner / eye_width
+        return ratio
+
+    elif mode == "vertical":
+        # Useful for 'Head Downcast' validation or rolling eyes
+        # 159 = Top Lid, 145 = Bottom Lid
+        eye_height = abs(lm[159].y - lm[145].y)
+        if eye_height == 0:
+            return 0.5
+
+        dist_to_top = abs(iris_center.y - lm[159].y)
+        return dist_to_top / eye_height
+
+    return 0.5
+
+
 def measure_facial_compression(face_landmarks):
     """
     Detects the 'scrunching' of the nose and upper lip typical of disgust.
