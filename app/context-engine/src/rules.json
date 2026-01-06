@@ -2,22 +2,754 @@
   {
     "id": "ctx_001",
     "meaning": "Surprise / Curiosity",
-    "triggers": ["eyebrow_raise"],
+    "triggers": [
+      "eyebrow_raise"
+    ],
     "threshold": 0.5,
     "priority": 1
   },
   {
     "id": "ctx_002",
     "meaning": "Requesting Attention",
-    "triggers": ["hand_raise"],
+    "triggers": [
+      "hand_raise"
+    ],
     "threshold": 0.9,
     "priority": 2
   },
   {
     "id": "ctx_003",
     "meaning": "Urgent Stop",
-    "triggers": ["hand_raise", "eyebrow_raise"],
+    "triggers": [
+      "hand_raise",
+      "eyebrow_raise"
+    ],
     "threshold": 0.5,
     "priority": 10
+  },
+  {
+    "id": "ctx_arm_cross",
+    "rule_code": "0",
+    "meaning": "Defensive, needing assurance/warmth, or feeling threatened. The tighter the grip, the stronger the need for reassurance[cite: 3, 7, 8].",
+    "triggers": [
+      "signal_arm_cross"
+    ],
+    "threshold": 0.5,
+    "priority": 1.0,
+    "source_ref": "1-17"
+  },
+  {
+    "id": "ctx_head_tilt",
+    "rule_code": "1",
+    "meaning": "Open and vulnerable gesture; indicates curiosity, flirting, innocence, or feigned boredom[cite: 19, 24].",
+    "triggers": [
+      "head_angle_offset"
+    ],
+    "threshold": 0.4,
+    "priority": 1.0,
+    "source_ref": "18-36"
+  },
+  {
+    "id": "ctx_chin_thrust",
+    "rule_code": "2",
+    "meaning": "Communicates anger, dissatisfaction, or challenge; in the US, it is registered as a challenge[cite: 41, 42].",
+    "triggers": [
+      "chin_thrust"
+    ],
+    "threshold": 0.5,
+    "priority": 1.0,
+    "source_ref": "37-45"
+  },
+  {
+    "id": "ctx_eyebrow_flash",
+    "rule_code": "3",
+    "meaning": "Quickly raising and lowering eyebrows conveys friendliness, trustworthiness, and vulnerability[cite: 47, 49].",
+    "triggers": [
+      "eyebrow_flash"
+    ],
+    "threshold": 0.5,
+    "priority": 1.0,
+    "source_ref": "46-53"
+  },
+  {
+    "id": "ctx_head_downcast",
+    "rule_code": "4",
+    "meaning": "Shame, guilt, submissiveness, and personal anger; used in flirtation by women[cite: 54, 55].",
+    "triggers": [
+      "signal_head_downcast"
+    ],
+    "threshold": 0.6,
+    "priority": 2.0,
+    "source_ref": "54-57"
+  },
+  {
+    "id": "ctx_lip_compression",
+    "rule_code": "5",
+    "meaning": "Predominately indicates suppressing opinions; creates a barrier that prevents speaking[cite: 58, 59].",
+    "triggers": [
+      "signal_lip_compression"
+    ],
+    "threshold": 0.5,
+    "priority": 3.0,
+    "source_ref": "58-64"
+  },
+  {
+    "id": "ctx_teeth_sucking",
+    "rule_code": "6",
+    "meaning": "Antisocial, aggressive behavior; challenge or expression of latent disrespect or contempt[cite: 65, 66].",
+    "triggers": [
+      "teeth_sucking"
+    ],
+    "threshold": 0.9,
+    "priority": 1.0,
+    "source_ref": "65-67"
+  },
+  {
+    "id": "ctx_turtling",
+    "rule_code": "7",
+    "meaning": "Fear-based gesture; shoulders draw upward and head lowered simultaneously to protect vital organs[cite: 68, 69].",
+    "triggers": [
+      "shoulders_raised",
+      "head_lowered"
+    ],
+    "threshold": 0.5,
+    "priority": 1.0,
+    "source_ref": "68-73"
+  },
+  {
+    "id": "ctx_object_in_mouth",
+    "rule_code": "8",
+    "meaning": "Need for reassurance or uncertainty; not likely to be a deceptive behavior[cite: 74, 75].",
+    "triggers": [
+      "object_in_mouth"
+    ],
+    "threshold": 0.5,
+    "priority": 2.0,
+    "source_ref": "74-79"
+  },
+  {
+    "id": "ctx_jaw_clenching",
+    "rule_code": "9",
+    "meaning": "Suggests withholding aggressive actions/feelings; can signify latent hostility or anger[cite: 81].",
+    "triggers": [
+      "jaw_clenching"
+    ],
+    "threshold": 0.7,
+    "priority": 1.0,
+    "source_ref": "80-81"
+  },
+  {
+    "id": "ctx_nostril_dilation",
+    "rule_code": "10",
+    "meaning": "Body signaling a need for more oxygen due to physical or emotional arousal[cite: 82, 85].",
+    "triggers": [
+      "signal_nostril_dilation"
+    ],
+    "threshold": 0.5,
+    "priority": 2.0,
+    "source_ref": "82-87"
+  },
+  {
+    "id": "ctx_confirmation_glance",
+    "rule_code": "11",
+    "meaning": "Cursory glance to verify if a story is 'working' or statement is believed[cite: 89, 90].",
+    "triggers": [
+      "signal_confirmation_glance"
+    ],
+    "threshold": 0.8,
+    "priority": 1.0,
+    "source_ref": "88-91"
+  },
+  {
+    "id": "ctx_yawn",
+    "rule_code": "12",
+    "meaning": "Likely sign of anxiety and sometimes deception if mixed with other 4.0-rated behaviors[cite: 92, 93].",
+    "triggers": [
+      "signal_yawn"
+    ],
+    "threshold": 0.6,
+    "priority": 4.0,
+    "source_ref": "92-97"
+  },
+  {
+    "id": "ctx_happiness",
+    "rule_code": "13",
+    "meaning": "Genuine happiness involves wrinkling outer eye corners; fake smiles use only the lower face[cite: 98, 99].",
+    "triggers": [
+      "signal_happiness"
+    ],
+    "threshold": 0.4,
+    "priority": 1.0,
+    "source_ref": "98-99"
+  },
+  {
+    "id": "ctx_flushing",
+    "rule_code": "14",
+    "meaning": "Natural reaction to adrenaline; indicates embarrassment, guilt, fear, or arousal[cite: 100, 102, 104].",
+    "triggers": [
+      "signal_flushing"
+    ],
+    "threshold": 0.7,
+    "priority": 2.0,
+    "source_ref": "100-104"
+  },
+  {
+    "id": "ctx_head_back",
+    "rule_code": "15",
+    "meaning": "Tilt backward to retrieve information (Hb1) or expose neck as a challenge (Hb2)[cite: 107, 108, 111].",
+    "triggers": [
+      "signal_head_back"
+    ],
+    "threshold": 0.6,
+    "priority": 1.0,
+    "source_ref": "105-111"
+  },
+  {
+    "id": "ctx_orbital_tension",
+    "rule_code": "17",
+    "meaning": "Muscular tension around eyes from curiosity, focus, or intense emotions[cite: 115, 116].",
+    "triggers": [
+      "signal_orbital_tension"
+    ],
+    "threshold": 0.5,
+    "priority": 2.0,
+    "source_ref": "115-118"
+  },
+  {
+    "id": "ctx_eyebrow_narrowing",
+    "rule_code": "18",
+    "meaning": "Narrowing brow associated with anger (Western) or deep concentration[cite: 119, 121].",
+    "triggers": [
+      "signal_eyebrow_narrowing"
+    ],
+    "threshold": 0.7,
+    "priority": 2.0,
+    "source_ref": "119-121"
+  },
+  {
+    "id": "ctx_ventilation",
+    "rule_code": "19",
+    "meaning": "Behaviors intended to lower body temperature due to stress, anxiety, and adrenaline[cite: 123, 126].",
+    "triggers": [
+      "signal_ventilation"
+    ],
+    "threshold": 0.8,
+    "priority": 3.0,
+    "source_ref": "122-127"
+  },
+  {
+    "id": "ctx_adams_apple_raise",
+    "rule_code": "20",
+    "meaning": "Sudden rise indicating disagreement and stress; precursor to fight-or-flight[cite: 129, 131].",
+    "triggers": [
+      "signal_adams_apple_jump"
+    ],
+    "threshold": 0.9,
+    "priority": 2.0,
+    "source_ref": "128-132"
+  },
+  {
+    "id": "ctx_baton_gestures",
+    "rule_code": "22",
+    "meaning": "Hand motions keeping time with speech. Asynchronous timing indicates a rift between feelings and words[cite: 140, 141].",
+    "triggers": [
+      "signal_baton_gestures"
+    ],
+    "threshold": 0.5,
+    "priority": 2.0,
+    "source_ref": "138-145"
+  },
+  {
+    "id": "ctx_vertical_head_shake",
+    "rule_code": "23",
+    "meaning": "Indicates 'Yes'. Watch for simultaneous barrier behaviors which may conflict[cite: 147, 148].",
+    "triggers": [
+      "signal_head_shake_vertical"
+    ],
+    "threshold": 0.4,
+    "priority": 1.0,
+    "source_ref": "146-149"
+  },
+  {
+    "id": "ctx_head_support",
+    "rule_code": "24",
+    "meaning": "Chin on hand (Hs1) shows boredom; head on hand near ear (Hs2) shows trust, curiosity, or defiance[cite: 152, 156].",
+    "triggers": [
+      "signal_head_support"
+    ],
+    "threshold": 0.6,
+    "priority": 2.0,
+    "source_ref": "150-156"
+  },
+  {
+    "id": "ctx_surprise",
+    "rule_code": "25",
+    "meaning": "Genuine surprise causes eyebrows to rise (exposing sclera) and lower jaw to drop[cite: 158, 159].",
+    "triggers": [
+      "signal_surprise"
+    ],
+    "threshold": 0.5,
+    "priority": 1.0,
+    "source_ref": "157-160"
+  },
+  {
+    "id": "ctx_blink_rate_high",
+    "rule_code": "26",
+    "meaning": "High stress, low concentration/interest, or feelings of superiority and contempt[cite: 165, 168].",
+    "triggers": [
+      "signal_blink_rate"
+    ],
+    "threshold": 0.7,
+    "priority": 2.0,
+    "source_ref": "161-170"
+  },
+  {
+    "id": "ctx_pupil_dilation",
+    "rule_code": "27",
+    "meaning": "Expansion in response to pleasurable stimuli; constriction (-Pd) in response to aversion[cite: 174, 176].",
+    "triggers": [
+      "signal_pupil_dilation"
+    ],
+    "threshold": 0.8,
+    "priority": 3.0,
+    "source_ref": "171-178"
+  },
+  {
+    "id": "ctx_eye_squint",
+    "rule_code": "28",
+    "meaning": "Stress, disagreement, or anxiety. If combined with head tilt/raised brows, indicates incredulity[cite: 180, 182].",
+    "triggers": [
+      "signal_eye_squint"
+    ],
+    "threshold": 0.6,
+    "priority": 2.0,
+    "source_ref": "179-185"
+  },
+  {
+    "id": "ctx_shoulder_shrug",
+    "rule_code": "29",
+    "meaning": "Uncertainty, surrender, fear, or denial. Single-sided shrug is highly associated with deception[cite: 188, 189].",
+    "triggers": [
+      "double_shrug",
+      "single_shrug"
+    ],
+    "threshold": 0.5,
+    "priority": 2.0,
+    "source_ref": "186-189"
+  },
+  {
+    "id": "ctx_disgust",
+    "rule_code": "31",
+    "meaning": "Emotional or physical disgust; highly reliable, almost never feigned[cite: 194, 197].",
+    "triggers": [
+      "signal_disgust"
+    ],
+    "threshold": 0.7,
+    "priority": 1.0,
+    "source_ref": "193-198"
+  },
+  {
+    "id": "ctx_fear",
+    "rule_code": "32",
+    "meaning": "Eyes widen, exposing sclera; lips stretch horizontally, eyebrows rise outwardly[cite: 200, 201].",
+    "triggers": [
+      "signal_fear"
+    ],
+    "threshold": 0.6,
+    "priority": 1.0,
+    "source_ref": "199-203"
+  },
+  {
+    "id": "ctx_protecting_gestures",
+    "rule_code": "35",
+    "meaning": "Limbs crossing over the body to cover a vital area; associated with anxiety and insecurity[cite: 213, 214].",
+    "triggers": [
+      "signal_protecting_gestures"
+    ],
+    "threshold": 0.8,
+    "priority": 2.0,
+    "source_ref": "212-216"
+  },
+  {
+    "id": "ctx_elbow_closure",
+    "rule_code": "37",
+    "meaning": "Inward drawing of elbows while seated; indicates discomfort, insecurity, and need for protection[cite: 225, 229].",
+    "triggers": [
+      "signal_elbow_closure"
+    ],
+    "threshold": 0.7,
+    "priority": 2.0,
+    "source_ref": "224-230"
+  },
+  {
+    "id": "ctx_pupil_constriction",
+    "rule_code": "42",
+    "meaning": "Response to stimuli we have a serious aversion to; restricts light entering the eye[cite: 254, 255].",
+    "triggers": [
+      "signal_pupil_constriction"
+    ],
+    "threshold": 0.8,
+    "priority": 3.0,
+    "source_ref": "251-258"
+  },
+  {
+    "id": "ctx_steepling",
+    "rule_code": "47",
+    "meaning": "Sign of internal confidence; holding fingers high indicates less willingness to listen[cite: 280, 281].",
+    "triggers": [
+      "signal_steepling"
+    ],
+    "threshold": 0.5,
+    "priority": 1.0,
+    "source_ref": "278-282"
+  },
+  {
+    "id": "ctx_hushing",
+    "rule_code": "74",
+    "meaning": "Bringing hands to face or covering mouth when nervous about thoughts or speech[cite: 399, 400].",
+    "triggers": [
+      "signal_hushing"
+    ],
+    "threshold": 0.6,
+    "priority": 2.0,
+    "source_ref": "398-401"
+  },
+  {
+    "id": "ctx_binding_legs",
+    "rule_code": "83",
+    "meaning": "Legs come together with no relaxation; associated with secretiveness and mistrust[cite: 433, 434].",
+    "triggers": [
+      "signal_binding_legs"
+    ],
+    "threshold": 0.8,
+    "priority": 2.0,
+    "source_ref": "432-434"
+  },
+  {
+    "id": "ctx_locked_ankles",
+    "rule_code": "84",
+    "meaning": "Ankles locked under a chair; indicates withholding or concealing information[cite: 436, 437].",
+    "triggers": [
+      "signal_locked_ankles"
+    ],
+    "threshold": 0.7,
+    "priority": 2.0,
+    "source_ref": "435-438"
+  },
+  {
+    "id": "ctx_eyelid_rubbing",
+    "rule_code": "89",
+    "meaning": "Indicates the need to stop thinking of something or to end a train of thought[cite: 465].",
+    "triggers": [
+      "signal_eyelid_rubbing"
+    ],
+    "threshold": 0.7,
+    "priority": 2.0,
+    "source_ref": "463-465"
+  },
+  {
+    "id": "ctx_knee_clasp",
+    "rule_code": "90",
+    "meaning": "Reveals an inner desire to leave or end a conversation; often seated with both hands[cite: 467, 468].",
+    "triggers": [
+      "signal_knee_clasp"
+    ],
+    "threshold": 0.6,
+    "priority": 1.0,
+    "source_ref": "466-468"
+  },
+  {
+    "id": "ctx_foot_withdrawal",
+    "rule_code": "91",
+    "meaning": "Sudden withdrawal of feet indicates immediate need to withhold something or loss of trust[cite: 470, 471].",
+    "triggers": [
+      "signal_foot_withdrawal"
+    ],
+    "threshold": 0.8,
+    "priority": 3.0,
+    "source_ref": "469-471"
+  },
+  {
+    "id": "ctx_finger_to_nose",
+    "rule_code": "92",
+    "meaning": "High-rated deceptive behavior; conceals the instinct to cover the mouth[cite: 473, 474].",
+    "triggers": [
+      "signal_finger_to_nose"
+    ],
+    "threshold": 0.9,
+    "priority": 3.0,
+    "source_ref": "472-475"
+  },
+  {
+    "id": "ctx_others_property",
+    "rule_code": "93",
+    "meaning": "Willingness to touch others' property reflects comfort levels and attitude toward the owner[cite: 477, 479].",
+    "triggers": [
+      "signal_interaction_others_property"
+    ],
+    "threshold": 0.6,
+    "priority": 1.0,
+    "source_ref": "476-481"
+  },
+  {
+    "id": "ctx_belonging_carelessness",
+    "rule_code": "96",
+    "meaning": "Carelessness with property communicates a careless attitude and aloof nature[cite: 490, 491].",
+    "triggers": [
+      "signal_carelessness"
+    ],
+    "threshold": 0.4,
+    "priority": 1.0,
+    "source_ref": "490-492"
+  },
+  {
+    "id": "ctx_object_barrier",
+    "rule_code": "100",
+    "meaning": "Covering the body with an object; indicates insecurity and a need for protection[cite: 504, 505].",
+    "triggers": [
+      "signal_object_barrier"
+    ],
+    "threshold": 0.7,
+    "priority": 2.0,
+    "source_ref": "503-505"
+  },
+  {
+    "id": "ctx_security_check",
+    "rule_code": "103",
+    "meaning": "Visually or physically checking personal objects; indicates mistrust and nervousness[cite: 515, 516].",
+    "triggers": [
+      "signal_security_check"
+    ],
+    "threshold": 0.5,
+    "priority": 2.0,
+    "source_ref": "514-518"
+  },
+  {
+    "id": "ctx_vocal_hesitancy",
+    "rule_code": "108",
+    "meaning": "Distinct pause before answering; allows processing of stories before speaking[cite: 537, 538].",
+    "triggers": [
+      "signal_vocal_hesitancy"
+    ],
+    "threshold": 0.7,
+    "priority": 3.0,
+    "source_ref": "536-539"
+  },
+  {
+    "id": "ctx_psychological_distancing",
+    "rule_code": "109",
+    "meaning": "Euphemizing an offense to reduce nonverbal stress and lessen experienced guilt[cite: 541, 544].",
+    "triggers": [
+      "signal_distancing_words"
+    ],
+    "threshold": 0.8,
+    "priority": 4.0,
+    "source_ref": "540-544"
+  },
+  {
+    "id": "ctx_vocal_pitch",
+    "rule_code": "110",
+    "meaning": "Muscles used in vocal production tighten, raising natural pitch due to stress[cite: 546].",
+    "triggers": [
+      "signal_pitch_increase",
+      "signal_pitch_rise"
+    ],
+    "threshold": 0.7,
+    "priority": 4.0,
+    "source_ref": "545-548"
+  },
+  {
+    "id": "ctx_vocal_speed",
+    "rule_code": "111",
+    "meaning": "Speeding up speech to 'get it over with' and lessen psychological stress[cite: 551].",
+    "triggers": [
+      "signal_vocal_speed_increase"
+    ],
+    "threshold": 0.6,
+    "priority": 2.0,
+    "source_ref": "549-551"
+  },
+  {
+    "id": "ctx_non_answer",
+    "rule_code": "112",
+    "meaning": "Lengthy response that does not answer the question; indicates evasion[cite: 553, 554].",
+    "triggers": [
+      "signal_non_answer_statement"
+    ],
+    "threshold": 0.8,
+    "priority": 4.0,
+    "source_ref": "552-555"
+  },
+  {
+    "id": "ctx_pronoun_absence",
+    "rule_code": "113",
+    "meaning": "Deceptive statements lack pronouns due to load on cognitive faculties[cite: 557, 558].",
+    "triggers": [
+      "signal_no_pronouns",
+      "signal_pronoun_absence"
+    ],
+    "threshold": 0.6,
+    "priority": 2.0,
+    "source_ref": "556-559"
+  },
+  {
+    "id": "ctx_resume_statement",
+    "rule_code": "114",
+    "meaning": "Listing good qualities to manage how the interviewer sees the subject[cite: 562, 564].",
+    "triggers": [
+      "signal_resume_statement"
+    ],
+    "threshold": 0.7,
+    "priority": 3.0,
+    "source_ref": "560-564"
+  },
+  {
+    "id": "ctx_non_contracting",
+    "rule_code": "115",
+    "meaning": "Declining to use contractions (e.g., 'did not') to sound more matter-of-fact[cite: 566, 569].",
+    "triggers": [
+      "signal_no_contractions",
+      "signal_non_contracting"
+    ],
+    "threshold": 0.5,
+    "priority": 2.0,
+    "source_ref": "565-569"
+  },
+  {
+    "id": "ctx_exclusions",
+    "rule_code": "121",
+    "meaning": "Polite ways of withholding information (e.g., 'basically', 'I suppose')[cite: 587, 588].",
+    "triggers": [
+      "signal_exclusion_words"
+    ],
+    "threshold": 0.6,
+    "priority": 2.0,
+    "source_ref": "586-588"
+  },
+  {
+    "id": "ctx_direct_chronology",
+    "rule_code": "122",
+    "meaning": "Recounting stories in perfect chronological order; genuine emotional stories are often jumbled[cite: 591, 592].",
+    "triggers": [
+      "signal_perfect_chronology"
+    ],
+    "threshold": 0.5,
+    "priority": 2.0,
+    "source_ref": "589-593"
+  },
+  {
+    "id": "ctx_sadness",
+    "rule_code": "30",
+    "meaning": "Pronounced effect of gravity on the face and full relaxation of facial muscles.",
+    "triggers": [
+      "signal_sadness"
+    ],
+    "threshold": 0.5,
+    "priority": 1,
+    "source_ref": "190-192"
+  },
+  {
+    "id": "ctx_swallowing",
+    "rule_code": "36",
+    "meaning": "Inconclusive alone; excess saliva produced during adrenaline spikes. Significant if clustered with other 4.0 behaviors.",
+    "triggers": [
+      "signal_swallowing"
+    ],
+    "threshold": 0.5,
+    "priority": 4,
+    "source_ref": "217-223"
+  },
+  {
+    "id": "ctx_freeze",
+    "rule_code": "54",
+    "meaning": "Movement comes to a near halt when cognitive load is high during deception management.",
+    "triggers": [
+      "signal_freeze"
+    ],
+    "threshold": 0.9,
+    "priority": 3,
+    "source_ref": "311-313"
+  },
+  {
+    "id": "ctx_arms_in_air",
+    "rule_code": "57",
+    "meaning": "Demonstrates high comfort, elation, and excitement.",
+    "triggers": [
+      "signal_arms_in_air"
+    ],
+    "threshold": 0.5,
+    "priority": 1,
+    "source_ref": "323-326"
+  },
+  {
+    "id": "ctx_palms_down",
+    "rule_code": "72",
+    "meaning": "Lack of willingness to be transparent or forthcoming; withholding information.",
+    "triggers": [
+      "signal_palms_down"
+    ],
+    "threshold": 0.6,
+    "priority": 2,
+    "source_ref": "388-393"
+  },
+  {
+    "id": "ctx_genital_protecting",
+    "rule_code": "73",
+    "meaning": "Indicates immediate need to protect oneself when verbal, physical, or psychological threats are presented[cite: 395]. Innate in most men when feeling vulnerable or threatened[cite: 397].",
+    "triggers": [
+      "signal_genital_protecting"
+    ],
+    "priority": 2,
+    "source_ref": "394-397"
+  },
+  {
+    "id": "ctx_groin_shield",
+    "rule_code": "102",
+    "meaning": "Indicates subjects' immediate need to protect themselves when a verbal, physical, or psychological threat is present[cite: 513]. Unconscious barrier gesture using hands or objects[cite: 512, 513].",
+    "triggers": [
+      "signal_groin_shield"
+    ],
+    "priority": 2,
+    "source_ref": "511-513"
+  },
+  {
+    "id": "ctx_double_leg_cross",
+    "rule_code": "63",
+    "meaning": "Distinct gesture where foot crosses once more around the lowest leg; indicates withholding and probable concealment[cite: 355, 356].",
+    "triggers": [
+      "signal_double_leg_cross"
+    ],
+    "priority": 3,
+    "source_ref": "353-356"
+  },
+  {
+    "id": "ctx_inward_toe_pointing",
+    "rule_code": "88",
+    "meaning": "Indicates self-consciousness and, when paired with barrier behaviors, indicates concealment, mistrust, or withholding[cite: 460].",
+    "triggers": [
+      "signal_toe_pointing_in"
+    ],
+    "priority": 2,
+    "source_ref": "459-462"
+  },
+  {
+    "id": "ctx_object_concealment",
+    "rule_code": "105",
+    "meaning": "Subjects concealing or tilting objects (like phones) away from view; indicates a desire to conceal surrogate information [cite: 524-527].",
+    "triggers": [
+      "signal_object_concealment"
+    ],
+    "priority": 3,
+    "source_ref": "523-527"
+  },
+  {
+    "id": "ctx_vocal_pitch_rise",
+    "rule_code": "110",
+    "meaning": "Anxiety causes muscles used in vocal production to tighten and raise the natural pitch of the voice[cite: 546].",
+    "triggers": [
+      "signal_pitch_rise"
+    ],
+    "priority": 4,
+    "source_ref": "545-548"
   }
 ]
