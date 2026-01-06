@@ -22,6 +22,7 @@ def get_active_face_signals(face_landmarks, pose_landmarks=None, frame=None):
     signals = []
 
     # --- Basic Geometry ---
+# ... [Keep all existing geometric checks: chin_thrust, etc.] ...
     if detect_chin_thrust(face_landmarks):
         signals.append("chin_thrust")
     if detect_lip_compression(face_landmarks):
@@ -38,8 +39,6 @@ def get_active_face_signals(face_landmarks, pose_landmarks=None, frame=None):
         signals.append("eye_squint")
     if detect_teeth_sucking(face_landmarks):
         signals.append("teeth_sucking")
-    if detect_lip_biting(face_landmarks):
-        signals.append("lip_biting")
     if detect_jaw_clenching(face_landmarks):
         signals.append("jaw_clenching")
     if detect_nostril_dilation(face_landmarks):
@@ -48,8 +47,6 @@ def get_active_face_signals(face_landmarks, pose_landmarks=None, frame=None):
         signals.append("yawn")
     if detect_eyebrow_narrowing(face_landmarks):
         signals.append("eyebrow_narrowing")
-
-    # --- Complex Expressions ---
     if detect_happiness_genuine(face_landmarks):
         signals.append("happiness_genuine")
     if detect_surprise_genuine(face_landmarks):
@@ -58,12 +55,8 @@ def get_active_face_signals(face_landmarks, pose_landmarks=None, frame=None):
         signals.append("fear")
     if detect_confirmation_glance(face_landmarks):
         signals.append("confirmation_glance")
-
-    # --- Motion Based ---
     if detect_vertical_head_shake(face_landmarks):
         signals.append("nodding_yes")
-
-    # --- Physiological (Requires Frame) ---
     if frame is not None:
         if detect_flushing(frame, face_landmarks):
             signals.append("flushing_redness")
