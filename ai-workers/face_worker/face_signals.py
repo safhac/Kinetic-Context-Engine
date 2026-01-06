@@ -89,6 +89,38 @@ def detect_head_downcast(face_landmarks, pose_landmarks):
 # Simplified EAR logic
 
 
+def measure_facial_compression(face_landmarks):
+    """
+    Detects the 'scrunching' of the nose and upper lip typical of disgust.
+    """
+    lm = face_landmarks.landmark
+
+    # 1. Define Key Points
+    nose_tip = lm[1]
+    upper_lip_top = lm[13]
+    chin = lm[152]
+    forehead = lm[10]  # Top of head
+
+    # 2. Calculate Distances
+    # The "Scrunch Zone": Distance between nose and lip
+    scrunch_dist = _dist(nose_tip, upper_lip_top)
+
+    # The "Face Scale": Total face height (to normalize for distance from camera)
+    face_height = _dist(forehead, chin)
+
+    # Safety check
+    if face_height == 0:
+        return False
+
+    # 3. Calculate Ratio
+    # Normal ratio is usually around 0.15 - 0.20
+    # A "Scrunched" face pulls the lip up, shrinking this distance.
+    ratio = scrunch_dist / face_height
+
+    # Threshold: If the nose-to-lip gap is less than 12% of total face height
+    return ratio < 0.12
+
+
 def check_redness_spike(frame, cheek_landmarks, face_landmarks):
     """
     Detects sudden increase in red channel intensity in cheek regions.
