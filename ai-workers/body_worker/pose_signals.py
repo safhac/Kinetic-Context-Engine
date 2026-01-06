@@ -10,6 +10,50 @@ _pose_history = {
 }
 
 
+def detect_vertical_surge(pose_landmarks, area="throat", threshold=0.015):
+    """
+    Detects a sudden upward movement (surge) in a specific body area.
+    Returns True if a surge occurred compared to recent history.
+    """
+    landmarks = pose_landmarks.landmark
+    current_y = 0.0
+    history_key = ""
+
+    # 1. Determine the target Y coordinate based on 'area'
+    if area == "throat":
+        # Approximate Adam's Apple: Midpoint between shoulders (11, 12)
+        # We assume the neck moves with the shoulders/head.
+        # Ideally, we'd use face landmark 152 (chin) + offset, but we are in Body Worker.
+        current_y = (landmarks[11].y + landmarks[12].y) / 2
+        history_key = "throat_y"
+    elif area == "ankle_left":
+        current_y = landmarks[27].y
+        history_key = "left_ankle_y"
+
+    # 2. Retrieve History
+    history = _pose_history.get(history_key, [])
+
+    # 3. Update History (Keep last 5 frames for smoothing or immediate comparison)
+    history.append(current_y)
+    if len(history) > 5:
+        history.pop(0)
+    _pose_history[history_key] = history
+
+    # 4. Check for Surge (Logic: Previous - Current > Threshold)
+    # Note: In MediaPipe, Y=0 is TOP. So "Upward" movement means Y decreases.
+    # Therefore: (Old_Y - New_Y) should be POSITIVE.
+
+    if len(history) < 2:
+        return False
+
+    # Compare current frame vs the average of the last 3 frames (to reduce jitter)
+    previous_avg = sum(history[:-1]) / len(history[:-1])
+
+    diff = previous_avg - current_y  # Positive if moving UP
+
+    return diff > threshold
+
+
 def detect_head_downcast(pose_landmarks):
     # Head lowered relative to shoulder line [cite: 54, 68]
     nose = pose_landmarks.landmark[0]
