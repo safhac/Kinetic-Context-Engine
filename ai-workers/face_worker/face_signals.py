@@ -312,12 +312,28 @@ def detect_pupil_dilation(face_landmarks):
 
 
 def detect_eye_squint(face_landmarks):
-    # Squint (Doc #28): Response to stress, disagreement, or concentration[cite: 180, 181].
-    # Differs from orbital tension by pronounced rising of cheek muscles.
-    cheek_lift = face_landmarks.landmark[205].y  # Measure vertical lift
-    eye_opening = abs(
-        face_landmarks.landmark[159].y - face_landmarks.landmark[145].y)
-    return eye_opening < 0.003 and cheek_lift < baseline_cheek_y
+    """
+    Detects narrowing of the eyelids (Squinting).
+    Doc #28 [cite: 179]
+    """
+    lm = face_landmarks.landmark
+
+    # Left Eye: Top (159) vs Bottom (145)
+    left_open = abs(lm[159].y - lm[145].y)
+
+    # Right Eye: Top (386) vs Bottom (374)
+    right_open = abs(lm[386].y - lm[374].y)
+
+    # Normalize by face height to account for camera zoom
+    face_height = abs(lm[10].y - lm[152].y)
+    if face_height == 0:
+        return False
+
+    avg_opening_ratio = ((left_open + right_open) / 2) / face_height
+
+    # Threshold: Normal opening is ~0.05. Squint is tighter.
+    # Blink is ~0.0. We want "Open but Small".
+    return 0.005 < avg_opening_ratio < 0.03
 
 
 def detect_disgust(face_landmarks):
