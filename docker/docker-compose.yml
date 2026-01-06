@@ -93,7 +93,20 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
-
+  
+    
+  ai-worker-audio:
+      build:
+        context: .
+        dockerfile: ai-workers/audio_worker/Dockerfile
+      environment:
+        KAFKA_BROKER: kafka:29092
+        SOURCE_TOPIC: raw_audio_chunk
+        DEST_TOPIC: processed_signals
+        PYTHONPATH: /app:/app/ai-workers/audio_worker
+      depends_on:
+        kafka:
+          condition: service_healthy
   # --- PRODUCER / API ---
   
   ingestion-service:
