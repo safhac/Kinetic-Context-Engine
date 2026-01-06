@@ -57,6 +57,7 @@ def get_active_face_signals(face_landmarks, pose_landmarks=None, frame=None):
         signals.append("confirmation_glance")
     if detect_vertical_head_shake(face_landmarks):
         signals.append("nodding_yes")
+
     if frame is not None:
         if detect_flushing(frame, face_landmarks):
             signals.append("flushing_redness")
