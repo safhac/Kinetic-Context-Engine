@@ -1,0 +1,222 @@
+def get_active_face_signals(face_landmarks):
+    signals = []
+
+    # Chin Thrust [cite: 40]
+    if detect_chin_thrust(face_landmarks):
+        signals.append("chin_thrust")
+
+    # Lip Compression [cite: 58]
+    if detect_lip_compression(face_landmarks):
+        signals.append("lips_compressed")
+
+    # Head Tilt [cite: 18]
+    if detect_head_tilt(face_landmarks):
+        signals.append("head_tilted")
+
+    return signals
+
+
+def detect_eyebrow_flash(face_landmarks):
+    # Distance between eyebrow top and eye center
+    eyebrow = face_landmarks.landmark[105]
+    eye = face_landmarks.landmark[33]
+    dist = abs(eyebrow.y - eye.y)
+    return dist > 0.04  # Threshold for 'raised' state
+
+
+def detect_head_downcast(face_landmarks, pose_landmarks):
+    nose = face_landmarks.landmark[1]
+    shoulders_y = (
+        pose_landmarks.landmark[11].y + pose_landmarks.landmark[12].y) / 2
+    return nose.y > (shoulders_y - 0.1)  # Head is low relative to shoulders
+
+# Simplified EAR logic
+
+
+def calculate_blink_rate(upper_lid, lower_lid, current_rate):
+    if abs(upper_lid.y - lower_lid.y) < 0.005:
+        return current_rate + 1
+    return current_rate
+
+
+def detect_pupil_constriction(iris_landmarks):
+    # Logic requires calculating the diameter of the dark pupil area vs iris
+    return pupil_diameter < baseline_diameter * 0.8
+
+
+def detect_teeth_sucking(face_landmarks):
+    left_corner = face_landmarks.landmark[61]
+    right_corner = face_landmarks.landmark[291]
+    # Logic: Lateral stretching + specific mouth shape
+    return abs(left_corner.x - right_corner.x) > 0.08
+
+
+def detect_eyebrow_flash(face_landmarks):
+    # Measures quick lift of eyebrows (Landmark 105 vs 33) [cite: 47, 51]
+    dist = abs(face_landmarks.landmark[105].y - face_landmarks.landmark[33].y)
+    return dist > 0.04
+
+
+def detect_teeth_sucking(face_landmarks):
+    # Detects lateral lip tension (61, 291) + specific mouth shape [cite: 65, 67]
+    width = abs(face_landmarks.landmark[61].x - face_landmarks.landmark[291].x)
+    return width > 0.08
+
+
+def detect_object_in_mouth(face_landmarks):
+    # Detects if a hand/object (from pose) or lips (from face) pass the barrier [cite: 74, 77]
+    # Here: simplified to detect lip-biting (lips passing teeth) [cite: 78]
+    upper_lip = face_landmarks.landmark[13]
+    lower_lip = face_landmarks.landmark[14]
+    return abs(upper_lip.z - lower_lip.z) > 0.01
+
+
+def detect_jaw_clenching(face_landmarks):
+    # Monitors muscular tension in temple (21) and jaw (172) area [cite: 80, 81]
+    dist = abs(face_landmarks.landmark[21].y - face_landmarks.landmark[172].y)
+    return dist < 0.05
+
+
+def detect_nostril_dilation(face_landmarks):
+    # Measures horizontal distance between nostril wings (Landmarks 64 and 294)
+    left_wing = face_landmarks.landmark[64]
+    right_wing = face_landmarks.landmark[294]
+    width = abs(left_wing.x - right_wing.x)
+    return width > 0.035  # Threshold for 'flaring'
+
+
+def detect_confirmation_glance(face_landmarks):
+    # Detects a quick, cursory lateral shift of the pupils (Landmarks 473, 468)
+    # compared to head orientation to verify if a story is "working"
+    left_iris = face_landmarks.landmark[468]
+    # Logic: Pupil position is significantly offset from center of eye socket
+    return abs(left_iris.x - 0.5) > 0.02
+
+
+def detect_yawn(face_landmarks):
+    # Measures the vertical distance of the lower jaw (Landmark 17)
+    upper_lip = face_landmarks.landmark[13]
+    lower_lip = face_landmarks.landmark[14]
+    gap = abs(upper_lip.y - lower_lip.y)
+    return gap > 0.15  # Distinctly larger than normal speech opening
+
+
+def detect_happiness_genuine(face_landmarks):
+    # Duchenne smile: checks for both lip corner pull (61, 291)
+    # and eye crinkling (Orbicularis oculi tension near 33, 263)
+    lip_width = abs(
+        face_landmarks.landmark[61].x - face_landmarks.landmark[291].x)
+    eye_squint = abs(
+        face_landmarks.landmark[159].y - face_landmarks.landmark[145].y)
+    return lip_width > 0.07 and eye_squint < 0.005
+
+
+def detect_flushing(frame, face_landmarks):
+    # Requires Raw Frame: Analyzes RGB/Lab color space in cheek regions
+    # (Landmarks 205 for left cheek, 425 for right cheek)
+    # This returns True if the 'a' channel (redness) spikes from baseline
+    return check_redness_spike(frame, [205, 425])
+
+
+def detect_head_back(face_landmarks):
+    # Measures the pitch of the head relative to the camera/vertical plane
+    nose = face_landmarks.landmark[1]
+    chin = face_landmarks.landmark[152]
+    # Logic: Nose Y is significantly higher than neutral baseline relative to chin
+    return nose.y < (chin.y - 0.15)
+
+
+def detect_orbital_tension(face_landmarks):
+    # Muscular tension around eyes (Orbicularis oculi) [cite: 115]
+    # Measures eye opening height (Landmarks 159 vs 145)
+    upper_lid = face_landmarks.landmark[159]
+    lower_lid = face_landmarks.landmark[145]
+    eye_opening = abs(upper_lid.y - lower_lid.y)
+    # Small opening indicates tension [cite: 116]
+    return 0.002 < eye_opening < 0.005
+
+
+def detect_eyebrow_narrowing(face_landmarks):
+    # Measures distance between inner eyebrows (Landmarks 55 and 285)
+    left_inner = face_landmarks.landmark[55]
+    right_inner = face_landmarks.landmark[285]
+    return abs(left_inner.x - right_inner.x) < 0.02
+
+
+def detect_vertical_head_shake(face_landmarks):
+    # Monitors the pitch (Y-axis) of the nose (1) relative to
+    # stationary shoulders to detect 'Yes' motion[cite: 147].
+    return detect_oscillating_vertical_movement(face_landmarks.landmark[1])
+
+
+def detect_head_support(face_landmarks, pose_landmarks):
+    # Detects if the chin (152) or ear (7) rests on a hand (15, 16).
+    # Hs1: Chin on hand. Hs2: Head tilted to hand near ear.
+    chin = face_landmarks.landmark[152]
+    left_hand = pose_landmarks.landmark[15]
+    return abs(chin.y - left_hand.y) < 0.05 and abs(chin.x - left_hand.x) < 0.05
+
+
+def detect_surprise_genuine(face_landmarks):
+    # Genuine surprise (Doc #25): Eyebrows rise, exposing sclera (white part)
+    # and the lower jaw drops[cite: 158, 159].
+    eyebrow_dist = abs(
+        face_landmarks.landmark[105].y - face_landmarks.landmark[33].y)
+    jaw_gap = abs(
+        face_landmarks.landmark[13].y - face_landmarks.landmark[14].y)
+    return eyebrow_dist > 0.05 and jaw_gap > 0.08
+
+
+def detect_pupil_dilation(face_landmarks):
+    # Dilation (Doc #27): Response to pleasurable stimuli[cite: 174, 175].
+    # Constriction (Doc #42): Response to aversion or disgust[cite: 176, 255].
+    # Logic: Requires high-res iris tracking to measure dark center ratio.
+    return detect_iris_center_ratio(face_landmarks, "expansion")
+
+
+def detect_eye_squint(face_landmarks):
+    # Squint (Doc #28): Response to stress, disagreement, or concentration[cite: 180, 181].
+    # Differs from orbital tension by pronounced rising of cheek muscles.
+    cheek_lift = face_landmarks.landmark[205].y  # Measure vertical lift
+    eye_opening = abs(
+        face_landmarks.landmark[159].y - face_landmarks.landmark[145].y)
+    return eye_opening < 0.003 and cheek_lift < baseline_cheek_y
+
+
+def detect_disgust(face_landmarks):
+    # Doc #31: Face 'crumples' toward the nose.
+    # Logic: Nose (1), Brows (55, 285), and Lip (0) move toward center.
+    return measure_facial_compression(face_landmarks)
+
+
+def detect_fear(face_landmarks):
+    # Doc #32: Eyes widen (sclera exposed), lips stretch horizontally.
+    eye_sclera = abs(
+        face_landmarks.landmark[159].y - face_landmarks.landmark[145].y)
+    lip_stretch = abs(
+        face_landmarks.landmark[61].x - face_landmarks.landmark[291].x)
+    return eye_sclera > 0.05 and lip_stretch > 0.08
+
+
+def detect_hushing(face_landmarks, pose_landmarks):
+    # Subjects bringing hands to face or covering the mouth[cite: 399].
+    # Logic: Proximity of wrist/fingers (15, 16) to mouth (13, 14).
+    mouth = face_landmarks.landmark[13]
+    hand = pose_landmarks.landmark[15]
+    return abs(mouth.x - hand.x) < 0.05 and abs(mouth.y - hand.y) < 0.05
+
+
+def detect_finger_to_nose(face_landmarks, pose_landmarks):
+    # Variation of hushing that conceals the instinct to cover the mouth[cite: 473].
+    # Logic: High-precision contact between index finger and nose tip (1).
+    nose = face_landmarks.landmark[1]
+    finger_tip = pose_landmarks.landmark[19]
+    return abs(nose.x - finger_tip.x) < 0.02 and abs(nose.y - finger_tip.y) < 0.02
+
+
+def detect_eyelid_rubbing(face_landmarks, pose_landmarks):
+    # Mostly performed by men; indicates a need to end a train of thought[cite: 465].
+    # Logic: Hand (15, 16) contact with ocular region (33, 263).
+    eye = face_landmarks.landmark[33]
+    hand = pose_landmarks.landmark[15]
+    return abs(eye.x - hand.x) < 0.03 and abs(eye.y - hand.y) < 0.03
