@@ -1,6 +1,52 @@
 import math
 
 
+# State storage for Face Worker
+_face_history = {
+    "nose_y": []  # Stores timestamped Y positions
+}
+
+
+def detect_oscillating_vertical_movement(landmark, window_frames=30, min_cycles=2):
+    """
+    Detects simple harmonic motion (nodding) by counting direction changes.
+    Args:
+        landmark: The MediaPipe landmark (e.g., Nose tip).
+        window_frames: How many past frames to analyze (30 frames ~ 1 second).
+        min_cycles: How many Up/Down flips constitute a "nod".
+    """
+    # 1. Update History
+    history = _face_history["nose_y"]
+    history.append(landmark.y)
+
+    # Keep strictly the last N frames
+    if len(history) > window_frames:
+        history.pop(0)
+
+    # Need enough data to detect oscillation
+    if len(history) < window_frames:
+        return False
+
+    # 2. Calculate Velocities (Delta between frames)
+    # v[i] = position[i] - position[i-1]
+    velocities = []
+    for i in range(1, len(history)):
+        velocities.append(history[i] - history[i-1])
+
+    # 3. Count Zero Crossings (Direction Changes)
+    # A change happens when velocity goes from + to - or - to +
+    flips = 0
+    for i in range(1, len(velocities)):
+        if (velocities[i] > 0 and velocities[i-1] < 0) or \
+           (velocities[i] < 0 and velocities[i-1] > 0):
+            # Filter out tiny jitters (noise)
+            if abs(velocities[i]) > 0.002:  # Threshold 0.2% of screen
+                flips += 1
+
+    # A full cycle (Down-Up) is 2 flips. A "Nod" is typically at least 1.5 cycles.
+    return flips >= (min_cycles * 2)
+
+
 def get_active_face_signals(face_landmarks):
     signals = []
 
