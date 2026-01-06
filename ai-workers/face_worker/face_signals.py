@@ -1,9 +1,11 @@
 import math
-
+import numpy as np
+import cv2
 
 # State storage for Face Worker
 _face_history = {
-    "nose_y": []  # Stores timestamped Y positions
+    "nose_y": [],
+    "cheek_redness": []  # Stores timestamped Y positions
 }
 
 
@@ -85,6 +87,55 @@ def detect_head_downcast(face_landmarks, pose_landmarks):
     return nose.y > (shoulders_y - 0.1)  # Head is low relative to shoulders
 
 # Simplified EAR logic
+
+
+def check_redness_spike(frame, cheek_landmarks, face_landmarks):
+    """
+    Detects sudden increase in red channel intensity in cheek regions.
+    Args:
+        frame: The BGR numpy image.
+        cheek_landmarks: List of landmark indices (e.g., [205, 425]).
+        face_landmarks: The full landmark object (to get coordinates).
+    """
+    h, w, _ = frame.shape
+    redness_values = []
+
+    for idx in cheek_landmarks:
+        lm = face_landmarks.landmark[idx]
+        # Convert normalized to pixel coords
+        px, py = int(lm.x * w), int(lm.y * h)
+
+        # Extract small 10x10 ROI around the cheek point
+        # Safety check for image bounds
+        if py < 5 or py > h-5 or px < 5 or px > w-5:
+            continue
+
+        roi = frame[py-5:py+5, px-5:px+5]
+
+        # Calculate Redness: Mean(Red) / Mean(Green)
+        # This helps normalize for overall brightness changes
+        if roi.size == 0:
+            continue
+
+        mean_b, mean_g, mean_r = cv2.mean(roi)[:3]
+        if mean_g > 0:
+            redness_values.append(mean_r / mean_g)
+
+    if not redness_values:
+        return False
+
+    avg_redness = sum(redness_values) / len(redness_values)
+
+    # History Check
+    history = _face_history["cheek_redness"]
+    history.append(avg_redness)
+    if len(history) > 60:  # 2 seconds
+        history.pop(0)
+
+    # Logic: Is current redness 10% higher than average of last 2 seconds?
+    baseline = sum(history) / len(history)
+
+    return avg_redness > (baseline * 1.10)
 
 
 def calculate_blink_rate(upper_lid, lower_lid, current_rate):

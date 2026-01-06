@@ -6,8 +6,47 @@ import math
 _pose_history = {
     "throat_y": [],
     "left_ankle_y": [],
-    "right_ankle_y": []
+    "right_ankle_y": [],
+    "left_ankle_pos": [],  # Stores tuples (x, y, z)
+    "right_ankle_pos": []
 }
+
+
+def detect_sudden_velocity(landmark, history_key, threshold=0.05):
+    """
+    Detects high-velocity movement in any direction.
+    Args:
+        landmark: The MediaPipe landmark object.
+        history_key: String key to store history (e.g., 'left_ankle_pos').
+        threshold: Distance moved per frame (0.05 is ~5% of screen width).
+    """
+    # 1. Get History
+    history = _pose_history.get(history_key, [])
+
+    # 2. Store current position
+    current_pos = (landmark.x, landmark.y, landmark.z)
+    history.append(current_pos)
+
+    # Keep strictly last 2 frames for instantaneous velocity
+    if len(history) > 2:
+        history.pop(0)
+    _pose_history[history_key] = history
+
+    # 3. Calculate Velocity
+    if len(history) < 2:
+        return False
+
+    prev = history[0]
+    curr = history[1]
+
+    # Euclidean distance formula (3D)
+    dist = math.sqrt(
+        (curr[0] - prev[0])**2 +
+        (curr[1] - prev[1])**2 +
+        (curr[2] - prev[2])**2
+    )
+
+    return dist > threshold
 
 
 def detect_vertical_surge(pose_landmarks, area="throat", threshold=0.015):
@@ -64,11 +103,38 @@ def detect_adams_apple_jump(pose_landmarks):
 
 def detect_foot_withdrawal(pose_landmarks):
     # Doc #91: Sudden withdrawal of feet under a chair.
-    # Logic: Sudden upward/backward movement of ankles while seated.
-    left_surge = detect_vertical_surge(
-        pose_landmarks, area="ankle_left", threshold=0.02)
-    # You would implement "ankle_right" similarly in the generic function
-    return left_surge
+    # Logic: High-velocity movement of ankles.
+    # We check both ankles.
+    left_move = detect_sudden_velocity(
+        pose_landmarks.landmark[27], "left_ankle_pos", threshold=0.05
+    )
+    right_move = detect_sudden_velocity(
+        pose_landmarks.landmark[28], "right_ankle_pos", threshold=0.05
+    )
+
+    return left_move or right_move
+
+
+def detect_patting_motion(hand_landmark, hip_landmark):
+    """
+    Detects if a hand is hovering near a hip and moving slightly.
+    """
+    # 1. Proximity Check (Is hand near pocket?)
+    # Distance between wrist and hip
+    dist = math.sqrt(
+        (hand_landmark.x - hip_landmark.x)**2 +
+        (hand_landmark.y - hip_landmark.y)**2
+    )
+
+    # If hand is not near hip (0.15 radius), ignore
+    if dist > 0.15:
+        return False
+
+    # 2. Movement Check
+    # We can reuse 'detect_sudden_velocity' with a LOWER threshold
+    # to detect the "jitter" of patting, or just return True for "Hand on Hip"
+    # For MVP, let's detect "Hand touching Hip/Pocket area"
+    return True
 
 
 def detect_head_downcast(pose_landmarks):
@@ -172,9 +238,14 @@ def detect_property_interaction(pose_landmarks, other_property_bounds):
 
 
 def detect_security_check(pose_landmarks):
-    # Doc #103: Checking safety/location of personal items (wallet, phone, purse).
-    # Logic: Hand (15, 16) moves to pockets or patting motion on clothing.
-    return detect_patting_motion(pose_landmarks.landmark[15], "pockets")
+    # Doc #103: Checking safety of personal items (pockets).
+    # Check Left Hand vs Left Hip (23) AND Right Hand vs Right Hip (24)
+    lm = pose_landmarks.landmark
+
+    left_check = detect_patting_motion(lm[15], lm[23])
+    right_check = detect_patting_motion(lm[16], lm[24])
+
+    return left_check or right_check
 
 
 def detect_pelvic_tilt(pose_landmarks):
