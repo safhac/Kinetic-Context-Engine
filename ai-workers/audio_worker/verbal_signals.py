@@ -53,11 +53,14 @@ def detect_pronoun_absence(text: str) -> bool:
     # Logic: Deceptive statements often drop "I" to dissociate from the act.
     # Note: Requires a sentence of sufficient length to be valid (e.g., > 3 words).
     words = text.lower().split()
-    if len(words) < 4:
+    if len(words) < 3:
         return False
 
-    pronouns = ["i", "me", "my", "we", "mine", "ours"]
-    return not any(p in words for p in pronouns)
+    pronouns = ["i", "i'm", "i've", "i'll", "i'd",
+                "me", "my", "we", "we're", "mine", "ours"]
+
+    cleaned_words = [w.strip(".,!?") for w in words]
+    return not any(p in cleaned_words for p in pronouns)
 
 
 def detect_non_contracting_statement(text: str) -> bool:
