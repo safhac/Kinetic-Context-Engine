@@ -1,5 +1,16 @@
 # Kinetic Context Engine (KCE)
 
+
+**⚠️ ETHICAL DISCLAIMER & LIMITATIONS**
+
+This software is a **Proof of Concept (PoC)** for multi-modal sensor fusion and signal processing. It is designed for **research and educational purposes only**.
+
+* **Not a Truth Verifier:** This system detects *stress indicators* (physiological and behavioral), which correlate with but do **not** prove deception. Innocent individuals may trigger high stress scores due to anxiety, and practiced liars may trigger low scores.  
+* **No Legal/Medical Standing:** The output of this software should never be used for legal, employment, medical, or interpersonal decision-making.  
+* **Bias Warning:** The underlying models (MediaPipe, Whisper) and heuristic rules may exhibit bias across different demographics, accents, or neurotypes.
+
+
+
 **Digitizing Human Non-Verbal Communication**
 
 ## Vision
