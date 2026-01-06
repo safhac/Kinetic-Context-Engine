@@ -62,6 +62,15 @@ def detect_adams_apple_jump(pose_landmarks):
     return False
 
 
+def detect_foot_withdrawal(pose_landmarks):
+    # Doc #91: Sudden withdrawal of feet under a chair.
+    # Logic: Sudden upward/backward movement of ankles while seated.
+    left_surge = detect_vertical_surge(
+        pose_landmarks, area="ankle_left", threshold=0.02)
+    # You would implement "ankle_right" similarly in the generic function
+    return left_surge
+
+
 def detect_head_downcast(pose_landmarks):
     # Head lowered relative to shoulder line [cite: 54, 68]
     nose = pose_landmarks.landmark[0]
