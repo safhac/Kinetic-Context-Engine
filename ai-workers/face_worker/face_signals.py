@@ -47,6 +47,11 @@ def detect_oscillating_vertical_movement(landmark, window_frames=30, min_cycles=
     return flips >= (min_cycles * 2)
 
 
+def detect_vertical_head_shake(face_landmarks):
+    # Monitors pitch of the nose (1) for 'Yes' motion
+    return detect_oscillating_vertical_movement(face_landmarks.landmark[1])
+
+
 def get_active_face_signals(face_landmarks):
     signals = []
 
