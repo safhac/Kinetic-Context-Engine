@@ -3,6 +3,8 @@ import numpy as np
 import cv2
 from typing import List, Dict, Any
 from shared.sensor_interface import SensorInterface
+from .face_signals import detect_face_gestures
+
 
 class MediaPipeFaceSensor(SensorInterface):
     def __init__(self):
@@ -21,34 +23,30 @@ class MediaPipeFaceSensor(SensorInterface):
 
         if processed.multi_face_landmarks:
             for face_landmarks in processed.multi_face_landmarks:
-                # Logic: Calculate Eyebrow Raise (Distance between eye top and eyebrow bottom)
-                # Landmarks: 159 (Left Eye Top), 66 (Left Eyebrow Inner)
-                left_eye_top = face_landmarks.landmark[159].y
-                left_brow_inner = face_landmarks.landmark[66].y
-                
-                # Simple heuristic for normalized distance
-                distance = abs(left_eye_top - left_brow_inner)
-                
-                # Threshold for "Raise" (Tune based on empirical data)
-                if distance > 0.05: 
-                    results.append({
-                        "signal": "eyebrow_raise",
-                        "intensity": min(distance * 10, 1.0), # Normalize 0-1
-                        "timestamp": timestamp,
-                        "source": "mediapipe_face_mesh"
-                    })
+                # NEW WAY (Using your new file):
+                # Pass the raw landmarks to the new library
+                detected_signals = detect_face_gestures(face_landmarks)
+
+                # Add timestamp and source
+                for signal in detected_signals:
+                    signal['timestamp'] = timestamp
+                    signal['source'] = 'mediapipe_face'
+                    results.append(signal)
+
         return results
+
 
 class OpenFaceSensor(SensorInterface):
     """
     Wrapper for OpenFace Action Unit (AU) detection.
     Note: Requires OpenFace binary or library installed in container.
     """
+
     def process_frame(self, frame: np.ndarray, timestamp: float) -> List[Dict[str, Any]]:
         results = []
         # Placeholder: In prod, this would call the OpenFace binary or C++ wrapper
         # simulating detection of Lip Compression (AU23 + AU24)
-        
+
         # mock_detection_logic()
         # if au23_intensity > 0.7 and au24_intensity > 0.7:
         #     results.append({
