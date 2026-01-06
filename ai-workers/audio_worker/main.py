@@ -19,7 +19,7 @@ logger = logging.getLogger("audio-worker")
 # Kafka Configuration
 KAFKA_BROKER = os.environ.get("KAFKA_BROKER", "kafka:29092")
 SOURCE_TOPIC = os.environ.get(
-    "SOURCE_TOPIC", "raw_audio_stream")  # Distinct topic for audio
+    "SOURCE_TOPIC", "raw_audio_chunk")  # Distinct topic for audio
 DEST_TOPIC = os.environ.get("DEST_TOPIC", "processed_signals")
 
 
