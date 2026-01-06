@@ -54,6 +54,14 @@ def detect_vertical_surge(pose_landmarks, area="throat", threshold=0.015):
     return diff > threshold
 
 
+def detect_adams_apple_jump(pose_landmarks):
+    # Detects sudden rise of the throat area
+    # We use a threshold of 0.015 (approx 1.5% of screen height)
+    if detect_vertical_surge(pose_landmarks, area="throat", threshold=0.015):
+        return True
+    return False
+
+
 def detect_head_downcast(pose_landmarks):
     # Head lowered relative to shoulder line [cite: 54, 68]
     nose = pose_landmarks.landmark[0]
