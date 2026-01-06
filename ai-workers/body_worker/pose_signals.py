@@ -1,3 +1,15 @@
+import math
+
+# A dictionary to hold state between frames.
+# In a real distributed system, this would be Redis, but for a worker process,
+# a global or class-level dict works perfectly fine for sequential frames.
+_pose_history = {
+    "throat_y": [],
+    "left_ankle_y": [],
+    "right_ankle_y": []
+}
+
+
 def detect_head_downcast(pose_landmarks):
     # Head lowered relative to shoulder line [cite: 54, 68]
     nose = pose_landmarks.landmark[0]
