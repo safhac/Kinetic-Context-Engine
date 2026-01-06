@@ -26,24 +26,12 @@ class MediaPipeBodySensor(SensorInterface):
         processed = self.pose.process(rgb_frame)
 
         if processed.pose_landmarks:
-            landmarks = processed.pose_landmarks.landmark
+            # Delegate logic to the new file
+            detected_signals = detect_body_gestures(processed.pose_landmarks)
 
-            # --- LOGIC: HAND RAISE DETECTION ---
-            # Landmarks: 0=Nose, 15=Left Wrist, 16=Right Wrist
-            # Note: In MediaPipe, Y coordinates are normalized (0 = Top, 1 = Bottom).
-            # So a "Higher" hand has a LOWER Y value.
-
-            nose_y = landmarks[self.mp_pose.PoseLandmark.NOSE].y
-            left_wrist_y = landmarks[self.mp_pose.PoseLandmark.LEFT_WRIST].y
-            right_wrist_y = landmarks[self.mp_pose.PoseLandmark.RIGHT_WRIST].y
-
-            # Threshold: Wrist must be significantly above nose (0.1 buffer)
-            if left_wrist_y < (nose_y - 0.1) or right_wrist_y < (nose_y - 0.1):
-                results.append({
-                    "signal": "hand_raise",
-                    "intensity": 1.0,
-                    "timestamp": timestamp,
-                    "source": "mediapipe_body_pose"
-                })
+            for signal in detected_signals:
+                signal['timestamp'] = timestamp
+                signal['source'] = 'mediapipe_body'
+                results.append(signal)
 
         return results
