@@ -1,4 +1,3 @@
-from .pose_signals import detect_body_gestures
 from shared.sensor_interface import SensorInterface
 import mediapipe as mp
 import numpy as np
@@ -8,6 +7,17 @@ from typing import List, Dict, Any
 import sys
 import os
 sys.path.append(os.getcwd())
+
+# --- FIX: Direct import + Correct function name ---
+try:
+    from pose_signals import get_active_pose_signals
+except ImportError:
+    from .pose_signals import get_active_pose_signals
+
+
+class SensorInterface:
+    def process_frame(self, frame, timestamp):
+        raise NotImplementedError
 
 
 class MediaPipeBodySensor(SensorInterface):
