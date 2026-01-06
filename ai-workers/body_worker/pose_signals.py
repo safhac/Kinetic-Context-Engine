@@ -12,6 +12,21 @@ _pose_history = {
 }
 
 
+def is_inside(point, bounds):
+    """
+    Checks if a MediaPipe landmark is inside a bounding box.
+    Args:
+        point: A landmark object (with .x, .y attributes).
+        bounds: A dict with {'x_min', 'y_min', 'x_max', 'y_max'} 
+                (values between 0.0 and 1.0).
+    """
+    if not bounds:
+        return False
+
+    return (bounds['x_min'] <= point.x <= bounds['x_max']) and \
+           (bounds['y_min'] <= point.y <= bounds['y_max'])
+
+
 def detect_sudden_velocity(landmark, history_key, threshold=0.05):
     """
     Detects high-velocity movement in any direction.
