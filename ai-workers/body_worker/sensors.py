@@ -1,3 +1,5 @@
+from .pose_signals import detect_body_gestures
+from shared.sensor_interface import SensorInterface
 import mediapipe as mp
 import numpy as np
 import cv2
@@ -6,7 +8,7 @@ from typing import List, Dict, Any
 import sys
 import os
 sys.path.append(os.getcwd())
-from shared.sensor_interface import SensorInterface
+
 
 class MediaPipeBodySensor(SensorInterface):
     def __init__(self):
@@ -25,12 +27,12 @@ class MediaPipeBodySensor(SensorInterface):
 
         if processed.pose_landmarks:
             landmarks = processed.pose_landmarks.landmark
-            
+
             # --- LOGIC: HAND RAISE DETECTION ---
             # Landmarks: 0=Nose, 15=Left Wrist, 16=Right Wrist
             # Note: In MediaPipe, Y coordinates are normalized (0 = Top, 1 = Bottom).
             # So a "Higher" hand has a LOWER Y value.
-            
+
             nose_y = landmarks[self.mp_pose.PoseLandmark.NOSE].y
             left_wrist_y = landmarks[self.mp_pose.PoseLandmark.LEFT_WRIST].y
             right_wrist_y = landmarks[self.mp_pose.PoseLandmark.RIGHT_WRIST].y
@@ -39,9 +41,9 @@ class MediaPipeBodySensor(SensorInterface):
             if left_wrist_y < (nose_y - 0.1) or right_wrist_y < (nose_y - 0.1):
                 results.append({
                     "signal": "hand_raise",
-                    "intensity": 1.0, 
+                    "intensity": 1.0,
                     "timestamp": timestamp,
                     "source": "mediapipe_body_pose"
                 })
-                
+
         return results
