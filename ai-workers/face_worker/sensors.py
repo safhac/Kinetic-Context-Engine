@@ -3,7 +3,16 @@ import numpy as np
 import cv2
 from typing import List, Dict, Any
 from shared.sensor_interface import SensorInterface
-from .face_signals import detect_face_gestures
+try:
+    from face_signals import get_active_face_signals
+except ImportError:
+    # Fallback if running from a different directory context
+    from .face_signals import get_active_face_signals
+
+
+class SensorInterface:
+    def process_frame(self, frame, timestamp):
+        raise NotImplementedErro
 
 
 class MediaPipeFaceSensor(SensorInterface):
