@@ -1,218 +1,113 @@
 import os
 import shutil
-import asyncio
+import uuid
 import json
 import logging
+import httpx  # Async HTTP client
+import asyncio
 from typing import Dict, List
-
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi import FastAPI, UploadFile, File, Form, Request, HTTPException
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
-
-from schemas import VideoUploadTask, ProcessingEvent, ImageTask, AudioTask
-# --- CONFIG ---
-KAFKA_BOOTSTRAP = os.getenv("KAFKA_BROKER", "kafka:29092")
-TOPIC_TELEMETRY = "raw_telemetry"
-TOPIC_NOTIFICATIONS = "interpreted_context"  # Where completion events come from
-UPLOAD_DIR = "/app/media/uploads"
+from aiokafka import AIOKafkaConsumer
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("ingestion-service")
+logger = logging.getLogger("api-gateway")
 
+app = FastAPI(title="KCE Public Gateway")
 
-app = FastAPI(title="KCE Ingestion Gateway")
+# Config
+INGESTION_URL = os.getenv("INGESTION_SERVICE_URL",
+                          "http://ingestion-service:8001")
+UPLOAD_DIR = "/app/media/uploads"
+KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:29092")
+TOPIC_RESULTS = "interpreted_context"  # Gateway ONLY listens to results
 
-# CORS for frontend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-# Mount Static UI
+# CORS & Static
+app.add_middleware(CORSMiddleware, allow_origins=[
+                   "*"], allow_methods=["*"], allow_headers=["*"])
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# --- GLOBAL STATE (Broadcaster Pattern) ---
-# Maps task_id -> List[asyncio.Queue]
-# When Kafka says "Task X done", we put data in all Queues for Task X.
+# SSE State
 active_connections: Dict[str, List[asyncio.Queue]] = {}
-
-# --- KAFKA LIFECYCLE ---
-producer = None
-consumer = None
 
 
 @app.on_event("startup")
-async def startup_event():
-    global producer, consumer
-    # 1. Setup Producer (Command Side)
-    producer = AIOKafkaProducer(bootstrap_servers=KAFKA_BOOTSTRAP)
-    await producer.start()
+async def startup():
+    # Start background listener for Results (for SSE)
+    asyncio.create_task(result_listener())
 
-    # 2. Setup Consumer (Query Side - Background Listener)
-    consumer = AIOKafkaConsumer(
-        TOPIC_NOTIFICATIONS,
-        bootstrap_servers=KAFKA_BOOTSTRAP,
-        group_id="gateway_broadcaster"
-    )
+
+async def result_listener():
+    consumer = AIOKafkaConsumer(TOPIC_RESULTS, bootstrap_servers=KAFKA_BROKER)
     await consumer.start()
-    asyncio.create_task(broadcast_listener())
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    if producer:
-        await producer.stop()
-    if consumer:
-        await consumer.stop()
-
-
-# --- BACKGROUND WORKER ---
-async def broadcast_listener():
-    """Reads from Kafka Notification Topic and dispatches to SSE clients."""
     try:
         async for msg in consumer:
             data = json.loads(msg.value)
-            task_id = data.get("task_id") or data.get("session_id")
-
+            task_id = data.get("task_id")
             if task_id in active_connections:
-                logger.info(f"Broadcasting update for {task_id}")
                 for q in active_connections[task_id]:
                     await q.put(data)
-    except Exception as e:
-        logger.error(f"Broadcaster Error: {e}")
-
-# --- COMMAND: UPLOAD ---
+    finally:
+        await consumer.stop()
 
 
-@app.post("/ingest/upload")
-async def upload_video(
-    file: UploadFile = File(...),
-    context: str = Form("general")
-):
-    try:
-        # 1. Governance / Validation
-        task_metadata = VideoUploadTask(
-            filename=file.filename,
-            content_type=file.content_type,
-            size_bytes=0,  # We'll update this after saving, or stream-count it
-            context_tag=context
-        )
-
-        # 2. Write to Disk (IO Bound)
-        file_location = f"{UPLOAD_DIR}/{task_metadata.task_id}.{task_metadata.filename.split('.')[-1]}"
-        os.makedirs(os.path.dirname(file_location), exist_ok=True)
-
-        with open(file_location, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-
-        # Update size for record
-        task_metadata.size_bytes = os.path.getsize(file_location)
-
-        # 3. Emit Domain Event (Kafka)
-        event = ProcessingEvent(
-            task_id=task_metadata.task_id,
-            payload={
-                "file_path": file_location,
-                "context": context,
-                "original_name": file.filename
-            }
-        )
-
-        await producer.send_and_wait(
-            TOPIC_TELEMETRY,
-            value=event.json().encode('utf-8')
-        )
-
-        return {"task_id": task_metadata.task_id, "status": "accepted"}
-
-    except ValueError as ve:
-        raise HTTPException(status_code=400, detail=str(ve))
-    except Exception as e:
-        logger.error(f"Upload failed: {e}")
-        raise HTTPException(status_code=500, detail="Internal Server Error")
-
-# --- QUERY: SSE STREAM ---
-
-
-@app.get("/ingest/stream/{task_id}")
-async def message_stream(request: Request, task_id: str):
+@app.post("/upload")
+async def upload_file(file: UploadFile = File(...), context: str = Form("general")):
     """
-    Server-Sent Events Endpoint.
-    Client keeps this open. We push data when Kafka receives it.
+    1. Save File (IO)
+    2. Ping Ingestion Service (Network)
     """
-    async def event_generator():
+    task_id = str(uuid.uuid4())
+    filename = f"{task_id}.{file.filename.split('.')[-1]}"
+    file_path = f"{UPLOAD_DIR}/{filename}"
+
+    # 1. Dumb IO
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    # 2. Handoff to Ingestion Service
+    payload = {
+        "task_id": task_id,
+        "file_path": file_path,
+        "context": context,
+        "original_name": file.filename
+    }
+
+    async with httpx.AsyncClient() as client:
+        try:
+            # We fire and forget (await response, but don't wait for processing)
+            resp = await client.post(f"{INGESTION_URL}/internal/ingest", json=payload)
+            resp.raise_for_status()
+        except Exception as e:
+            logger.error(f"Failed to contact Ingestion Service: {e}")
+            raise HTTPException(
+                status_code=503, detail="Processing Service Unavailable")
+
+    return {"task_id": task_id, "status": "queued"}
+
+
+@app.get("/stream/{task_id}")
+async def stream(request: Request, task_id: str):
+    """Standard SSE implementation"""
+    async def generator():
         q = asyncio.Queue()
-
-        # Register connection
         if task_id not in active_connections:
             active_connections[task_id] = []
         active_connections[task_id].append(q)
-
         try:
             while True:
-                # Check if client disconnected
                 if await request.is_disconnected():
                     break
-
-                # Wait for data from the Background Broadcaster
-                # Timeout allows us to send keep-alive pings
                 try:
-                    data = await asyncio.wait_for(q.get(), timeout=15.0)
+                    data = await asyncio.wait_for(q.get(), timeout=15)
                     yield f"data: {json.dumps(data)}\n\n"
-
-                    # If job is done, we can close the stream
                     if data.get("status") in ["completed", "failed"]:
-                        yield "event: close\ndata: end\n\n"
                         break
-
                 except asyncio.TimeoutError:
                     yield ": keep-alive\n\n"
-
         finally:
-            # Cleanup
             active_connections[task_id].remove(q)
-            if not active_connections[task_id]:
-                del active_connections[task_id]
-
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
-
-
-# ==========================================
-#  PART 2: SPECIFIC MODALITY ENDPOINTS
-# ==========================================
-
-@app.post("/process/body")
-async def process_body(task: ImageTask):
-    """Direct injection for Body Worker"""
-    if producer:
-        await producer.send_and_wait('body-tasks', json.dumps(task.dict()).encode('utf-8'))
-    return {"status": "queued", "queue": "body-tasks", "task_id": task.task_id}
-
-
-@app.post("/process/face")
-async def process_face(task: ImageTask):
-    """Direct injection for Face Worker"""
-    if producer:
-        await producer.send_and_wait('face-tasks', json.dumps(task.dict()).encode('utf-8'))
-    return {"status": "queued", "queue": "face-tasks", "task_id": task.task_id}
-
-
-@app.post("/process/audio")
-async def process_audio(task: AudioTask):
-    """
-    Direct injection for Voice Parsing
-    Target Topic: 'audio-tasks'
-    """
-    if producer:
-        await producer.send_and_wait('audio-tasks', json.dumps(task.dict()).encode('utf-8'))
-    return {"status": "queued", "queue": "audio-tasks", "task_id": task.task_id}
-
-
-@app.get("/health")
-def health():
-    return {"status": "ok", "services": ["kafka", "redis"]}
+    return StreamingResponse(generator(), media_type="text/event-stream")
