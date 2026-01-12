@@ -3,14 +3,15 @@ import shutil
 import uuid
 import json
 import logging
-import httpx  # Async HTTP client
+import httpx
 import asyncio
-from typing import Dict, List
+from typing import Dict
 from fastapi import FastAPI, UploadFile, File, Form, Request, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from aiokafka import AIOKafkaConsumer
+from pydantic import BaseModel
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("api-gateway")
@@ -22,7 +23,7 @@ INGESTION_URL = os.getenv("INGESTION_SERVICE_URL",
                           "http://ingestion-service:8001")
 UPLOAD_DIR = "/app/media/uploads"
 KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:29092")
-TOPIC_RESULTS = "interpreted_context"  # Gateway ONLY listens to results
+TOPIC_RESULTS = "interpreted_context"
 
 # CORS & Static
 app.add_middleware(CORSMiddleware, allow_origins=[
@@ -32,10 +33,11 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # SSE State
 active_connections: Dict[str, List[asyncio.Queue]] = {}
 
+# --- SSE LISTENER ---
+
 
 @app.on_event("startup")
 async def startup():
-    # Start background listener for Results (for SSE)
     asyncio.create_task(result_listener())
 
 
@@ -52,46 +54,61 @@ async def result_listener():
     finally:
         await consumer.stop()
 
+# --- UPLOAD ENDPOINT ---
+
 
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...), context: str = Form("general")):
-    """
-    1. Save File (IO)
-    2. Ping Ingestion Service (Network)
-    """
     task_id = str(uuid.uuid4())
     filename = f"{task_id}.{file.filename.split('.')[-1]}"
     file_path = f"{UPLOAD_DIR}/{filename}"
 
-    # 1. Dumb IO
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # 2. Handoff to Ingestion Service
-    payload = {
-        "task_id": task_id,
-        "file_path": file_path,
-        "context": context,
-        "original_name": file.filename
-    }
+    payload = {"task_id": task_id, "file_path": file_path,
+               "context": context, "original_name": file.filename}
 
+    # Forward to Ingestion Service
     async with httpx.AsyncClient() as client:
-        try:
-            # We fire and forget (await response, but don't wait for processing)
-            resp = await client.post(f"{INGESTION_URL}/internal/ingest", json=payload)
-            resp.raise_for_status()
-        except Exception as e:
-            logger.error(f"Failed to contact Ingestion Service: {e}")
-            raise HTTPException(
-                status_code=503, detail="Processing Service Unavailable")
+        await client.post(f"{INGESTION_URL}/internal/ingest/video", json=payload)
 
     return {"task_id": task_id, "status": "queued"}
+
+# --- RESTORED: SPECIFIC ENDPOINTS ---
+
+
+class TaskModel(BaseModel):
+    task_id: str
+    metadata: dict = {}
+
+
+@app.post("/process/body")
+async def process_body(task: TaskModel):
+    async with httpx.AsyncClient() as client:
+        await client.post(f"{INGESTION_URL}/internal/dispatch/body", json=task.dict())
+    return {"status": "dispatched", "type": "body"}
+
+
+@app.post("/process/face")
+async def process_face(task: TaskModel):
+    async with httpx.AsyncClient() as client:
+        await client.post(f"{INGESTION_URL}/internal/dispatch/face", json=task.dict())
+    return {"status": "dispatched", "type": "face"}
+
+
+@app.post("/process/audio")
+async def process_audio(task: TaskModel):
+    async with httpx.AsyncClient() as client:
+        await client.post(f"{INGESTION_URL}/internal/dispatch/audio", json=task.dict())
+    return {"status": "dispatched", "type": "audio"}
+
+# --- SSE STREAM ---
 
 
 @app.get("/stream/{task_id}")
 async def stream(request: Request, task_id: str):
-    """Standard SSE implementation"""
     async def generator():
         q = asyncio.Queue()
         if task_id not in active_connections:

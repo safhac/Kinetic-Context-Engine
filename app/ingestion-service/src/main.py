@@ -1,106 +1,90 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
-from pydantic import BaseModel, Field
-from typing import Dict, Any, Optional
 import os
-import shutil
-import uuid
+import json
 import logging
-from celery import Celery
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from aiokafka import AIOKafkaProducer
 
-# Import schemas (Ensure schemas.py exists in the src folder or shared path)
-from .schemas import TelemetryPayload 
-
-# Initialize Logger
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("ingestion-service")
 
-app = FastAPI(title="KCE Ingestion Gate")
+app = FastAPI(title="KCE Ingestion Service")
 
-# --- Configuration ---
-# 1. Kafka Config
-KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:9092")
-TOPIC_NAME = os.getenv("KAFKA_TOPIC", "raw-telemetry")
+# Config
+KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:29092")
+# Topics
+TOPIC_FACE = "face-tasks"
+TOPIC_BODY = "body-tasks"
+TOPIC_AUDIO = "audio-tasks"
 
-# 2. Redis/Celery Config (New)
-CELERY_BROKER = os.getenv("CELERY_BROKER_URL", "redis://redis:6379/0")
-celery_client = Celery('ingestion', broker=CELERY_BROKER)
-
-# 3. Shared Storage Config (New)
-UPLOAD_DIR = "/app/media/uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-# Placeholder for Kafka Producer
 producer = None
 
+
 @app.on_event("startup")
-async def startup_event():
+async def startup():
     global producer
+    producer = AIOKafkaProducer(bootstrap_servers=KAFKA_BROKER)
+    await producer.start()
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    if producer:
+        await producer.stop()
+
+# --- DATA MODELS ---
+
+
+class VideoIngest(BaseModel):
+    task_id: str
+    file_path: str
+    context: str
+    original_name: str
+
+
+class TaskDispatch(BaseModel):
+    task_id: str
+    metadata: dict = {}
+
+# --- ENDPOINTS ---
+
+
+@app.post("/internal/ingest/video")
+async def ingest_video(payload: VideoIngest):
+    """Main Pipeline: Fan-out to ALL workers"""
+    msg = json.dumps(payload.dict()).encode('utf-8')
     try:
-        from kafka import KafkaProducer
-        import json
-        producer = KafkaProducer(
-            bootstrap_servers=KAFKA_BROKER,
-            value_serializer=lambda v: json.dumps(v).encode('utf-8')
-        )
-        logger.info(f"Connected to Kafka at {KAFKA_BROKER}")
+        # Start all 3 workers for a full video analysis
+        await producer.send_and_wait(TOPIC_FACE, msg)
+        await producer.send_and_wait(TOPIC_BODY, msg)
+        await producer.send_and_wait(TOPIC_AUDIO, msg)
+        return {"status": "ok", "pipeline": "full_video"}
     except Exception as e:
-        logger.error(f"Failed to connect to Kafka: {e}")
+        logger.error(f"Kafka Error: {e}")
+        raise HTTPException(status_code=500, detail="Kafka Failure")
 
-# --- Existing Telemetry Endpoint ---
-@app.post("/ingest")
-async def ingest_telemetry(payload: TelemetryPayload):
-    """
-    High-throughput endpoint receiving raw video metadata and telemetry.
-    """
-    if not producer:
-        raise HTTPException(status_code=503, detail="Data bus unavailable")
 
-    try:
-        # Push to Kafka
-        future = producer.send(TOPIC_NAME, key=payload.session_id.encode('utf-8'), value=payload.dict())
-        return {"status": "queued", "partition": future.get().partition}
-    except Exception as e:
-        logger.error(f"Ingestion failed: {e}")
-        raise HTTPException(status_code=500, detail="Ingestion failed")
+@app.post("/internal/dispatch/body")
+async def dispatch_body(payload: TaskDispatch):
+    """Specific Pipeline: Body Only"""
+    await producer.send_and_wait(TOPIC_BODY, json.dumps(payload.dict()).encode('utf-8'))
+    return {"status": "ok", "target": "body_worker"}
 
-# --- NEW: Video Upload Endpoint ---
-@app.post("/upload")
-async def upload_video(file: UploadFile = File(...)):
-    """
-    Receives a video, saves it to Shared Volume, and triggers AI Worker.
-    """
-    try:
-        # 1. Generate ID and Path
-        task_id = str(uuid.uuid4())
-        filename = f"{task_id}.mp4"
-        file_path = os.path.join(UPLOAD_DIR, filename)
 
-        # 2. Save file to disk (Shared Volume)
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+@app.post("/internal/dispatch/face")
+async def dispatch_face(payload: TaskDispatch):
+    """Specific Pipeline: Face Only"""
+    await producer.send_and_wait(TOPIC_FACE, json.dumps(payload.dict()).encode('utf-8'))
+    return {"status": "ok", "target": "face_worker"}
 
-        # 3. Trigger Celery Task
-        # Must match name in ai-workers/body-worker/tasks.py
-        celery_client.send_task(
-            'process_body_video', 
-            args=[file_path, task_id],
-            task_id=task_id
-        )
 
-        logger.info(f"Video {task_id} queued for processing.")
-        return {
-            "status": "queued", 
-            "task_id": task_id, 
-            "message": "Video accepted. Processing started in background."
-        }
+@app.post("/internal/dispatch/audio")
+async def dispatch_audio(payload: TaskDispatch):
+    """Specific Pipeline: Audio Only"""
+    await producer.send_and_wait(TOPIC_AUDIO, json.dumps(payload.dict()).encode('utf-8'))
+    return {"status": "ok", "target": "audio_worker"}
 
-    except Exception as e:
-        logger.error(f"Upload failed: {e}")
-        # Clean up partial file
-        if 'file_path' in locals() and os.path.exists(file_path):
-            os.remove(file_path)
-        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/health")
-def health_check():
-    return {"status": "active", "service": "ingestion-gate"}
+def health():
+    return {"status": "active"}
