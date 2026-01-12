@@ -11,8 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
 
-from schemas import VideoUploadTask, ProcessingEvent
-
+from schemas import VideoUploadTask, ProcessingEvent, ImageTask, AudioTask
 # --- CONFIG ---
 KAFKA_BOOTSTRAP = os.getenv("KAFKA_BROKER", "kafka:29092")
 TOPIC_TELEMETRY = "raw_telemetry"
@@ -183,18 +182,37 @@ async def message_stream(request: Request, task_id: str):
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
+# ==========================================
+#  PART 2: SPECIFIC MODALITY ENDPOINTS
+# ==========================================
+
 @app.post("/process/body")
 async def process_body(task: ImageTask):
-    # producer.send('body-tasks', json.dumps(task.dict()).encode('utf-8'))
+    """Direct injection for Body Worker"""
+    if producer:
+        await producer.send_and_wait('body-tasks', json.dumps(task.dict()).encode('utf-8'))
     return {"status": "queued", "queue": "body-tasks", "task_id": task.task_id}
 
 
 @app.post("/process/face")
 async def process_face(task: ImageTask):
-    # producer.send('face-tasks', json.dumps(task.dict()).encode('utf-8'))
+    """Direct injection for Face Worker"""
+    if producer:
+        await producer.send_and_wait('face-tasks', json.dumps(task.dict()).encode('utf-8'))
     return {"status": "queued", "queue": "face-tasks", "task_id": task.task_id}
+
+
+@app.post("/process/audio")
+async def process_audio(task: AudioTask):
+    """
+    Direct injection for Voice Parsing
+    Target Topic: 'audio-tasks'
+    """
+    if producer:
+        await producer.send_and_wait('audio-tasks', json.dumps(task.dict()).encode('utf-8'))
+    return {"status": "queued", "queue": "audio-tasks", "task_id": task.task_id}
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "services": ["kafka", "redis"]}
