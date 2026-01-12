@@ -9,5 +9,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY ./shared /app/shared
 # Copy src
 COPY ./api-gateway/src /app/src
+COPY api-gateway/static /app/static
 
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
