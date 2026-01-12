@@ -47,6 +47,31 @@ producer = None
 consumer = None
 
 
+@app.on_event("startup")
+async def startup_event():
+    global producer, consumer
+    # 1. Setup Producer (Command Side)
+    producer = AIOKafkaProducer(bootstrap_servers=KAFKA_BOOTSTRAP)
+    await producer.start()
+
+    # 2. Setup Consumer (Query Side - Background Listener)
+    consumer = AIOKafkaConsumer(
+        TOPIC_NOTIFICATIONS,
+        bootstrap_servers=KAFKA_BOOTSTRAP,
+        group_id="gateway_broadcaster"
+    )
+    await consumer.start()
+    asyncio.create_task(broadcast_listener())
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    if producer:
+        await producer.stop()
+    if consumer:
+        await consumer.stop()
+
+
 @app.post("/process/body")
 async def process_body(task: ImageTask):
     # producer.send('body-tasks', json.dumps(task.dict()).encode('utf-8'))
