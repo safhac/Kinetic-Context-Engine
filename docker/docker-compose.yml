@@ -122,9 +122,9 @@ services:
       redis:
         condition: service_started
     environment:
-      TZ: Asia/Jerusalem
-      # Kafka Config
       KAFKA_BROKER: kafka:29092
-      KAFKA_TOPIC: raw_telemetry
-      # Redis Config
-      CELERY_BROKER_URL: redis://redis:6379/0
+      KAFKA_TOPIC_FACE: face-tasks
+      KAFKA_TOPIC_BODY: body-tasks
+      KAFKA_TOPIC_AUDIO: audio-tasks
+    depends_on:
+      - kafka
