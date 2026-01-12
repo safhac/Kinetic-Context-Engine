@@ -23,10 +23,15 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ingestion-service")
 
 
-app = FastAPI()
+app = FastAPI(title="KCE Ingestion Gateway")
 
-# KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:9092")
-# producer = KafkaProducer(bootstrap_servers=KAFKA_BROKER)
+# CORS for frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.post("/process/body")
