@@ -5,7 +5,7 @@ import uuid
 
 # --- GOVERNANCE POLICY ---
 MAX_FILE_SIZE = 500 * 1024 * 1024  # 500MB
-ALLOWED_EXTENSIONS = {'mp4', 'mov', 'avi', 'mkv', 'mp3', 'wav'}
+ALLOWED_EXTENSIONS = {'mp4', 'mov', 'avi', 'mkv', 'mp3', 'wav', 'ogg', 'flac'}
 
 
 class VideoUploadTask(BaseModel):
@@ -40,3 +40,16 @@ class ProcessingEvent(BaseModel):
     payload: Dict
     source: str = "api-gateway"
     timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+
+# --- LEGACY / SPECIFIC ENDPOINT SCHEMAS ---
+class ImageTask(BaseModel):
+    task_id: str
+    image_url: str
+    metadata: Optional[dict] = {}
+
+
+class AudioTask(BaseModel):
+    task_id: str
+    audio_url: str
+    metadata: Optional[dict] = {}
