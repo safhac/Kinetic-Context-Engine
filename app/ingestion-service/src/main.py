@@ -2,22 +2,29 @@ import os
 import json
 import logging
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
 from aiokafka import AIOKafkaProducer
+
+# Import ONLY the new schemas
+from schemas import VideoIngestRequest, TaskDispatch
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ingestion-service")
 
 app = FastAPI(title="KCE Ingestion Service")
 
-# Config
+# --- CONFIG ---
 KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:29092")
-# Topics
-TOPIC_FACE = "face-tasks"
-TOPIC_BODY = "body-tasks"
-TOPIC_AUDIO = "audio-tasks"
+
+# Map "Pipeline Names" to "Kafka Topics"
+TOPIC_MAP = {
+    "face": "face-tasks",
+    "body": "body-tasks",
+    "audio": "audio-tasks"
+}
 
 producer = None
+
+# --- LIFECYCLE ---
 
 
 @app.on_event("startup")
@@ -25,6 +32,7 @@ async def startup():
     global producer
     producer = AIOKafkaProducer(bootstrap_servers=KAFKA_BROKER)
     await producer.start()
+    logger.info("Kafka Producer Connected")
 
 
 @app.on_event("shutdown")
@@ -32,59 +40,67 @@ async def shutdown():
     if producer:
         await producer.stop()
 
-# --- DATA MODELS ---
+# --- HELPER ---
 
 
-class VideoIngest(BaseModel):
-    task_id: str
-    file_path: str
-    context: str
-    original_name: str
-
-
-class TaskDispatch(BaseModel):
-    task_id: str
-    metadata: dict = {}
+async def dispatch_to_kafka(topic: str, payload: dict):
+    try:
+        msg = json.dumps(payload).encode('utf-8')
+        await producer.send_and_wait(topic, msg)
+    except Exception as e:
+        logger.error(f"Kafka Publish Error ({topic}): {e}")
+        raise HTTPException(status_code=500, detail="Event Bus Failure")
 
 # --- ENDPOINTS ---
 
 
 @app.post("/internal/ingest/video")
-async def ingest_video(payload: VideoIngest):
-    """Main Pipeline: Fan-out to ALL workers"""
-    msg = json.dumps(payload.dict()).encode('utf-8')
-    try:
-        # Start all 3 workers for a full video analysis
-        await producer.send_and_wait(TOPIC_FACE, msg)
-        await producer.send_and_wait(TOPIC_BODY, msg)
-        await producer.send_and_wait(TOPIC_AUDIO, msg)
-        return {"status": "ok", "pipeline": "full_video"}
-    except Exception as e:
-        logger.error(f"Kafka Error: {e}")
-        raise HTTPException(status_code=500, detail="Kafka Failure")
+async def ingest_video(request: VideoIngestRequest):
+    """
+    Fan-out Strategy:
+    Gateway sends 1 request -> We fire N Kafka Events (Face, Body, Audio)
+    """
+    triggered = []
+
+    # Convert Pydantic model to Dict ONCE
+    payload = request.dict()
+
+    for pipeline in request.pipelines:
+        if pipeline in TOPIC_MAP:
+            target_topic = TOPIC_MAP[pipeline]
+            await dispatch_to_kafka(target_topic, payload)
+            triggered.append(pipeline)
+        else:
+            logger.warning(f"Skipping unknown pipeline: {pipeline}")
+
+    if not triggered:
+        raise HTTPException(
+            status_code=400, detail="No valid pipelines requested")
+
+    return {
+        "status": "dispatched",
+        "task_id": request.task_id,
+        "pipelines_triggered": triggered
+    }
 
 
-@app.post("/internal/dispatch/body")
-async def dispatch_body(payload: TaskDispatch):
-    """Specific Pipeline: Body Only"""
-    await producer.send_and_wait(TOPIC_BODY, json.dumps(payload.dict()).encode('utf-8'))
-    return {"status": "ok", "target": "body_worker"}
+@app.post("/internal/dispatch/{worker_type}")
+async def dispatch_specific(worker_type: str, task: TaskDispatch):
+    """
+    Direct Injection for testing or specific re-runs.
+    """
+    if worker_type not in TOPIC_MAP:
+        raise HTTPException(
+            status_code=404, detail=f"Worker '{worker_type}' not configured")
 
+    target_topic = TOPIC_MAP[worker_type]
 
-@app.post("/internal/dispatch/face")
-async def dispatch_face(payload: TaskDispatch):
-    """Specific Pipeline: Face Only"""
-    await producer.send_and_wait(TOPIC_FACE, json.dumps(payload.dict()).encode('utf-8'))
-    return {"status": "ok", "target": "face_worker"}
+    # Forward the task_id and metadata to the worker
+    await dispatch_to_kafka(target_topic, task.dict())
 
-
-@app.post("/internal/dispatch/audio")
-async def dispatch_audio(payload: TaskDispatch):
-    """Specific Pipeline: Audio Only"""
-    await producer.send_and_wait(TOPIC_AUDIO, json.dumps(payload.dict()).encode('utf-8'))
-    return {"status": "ok", "target": "audio_worker"}
+    return {"status": "dispatched", "target_topic": target_topic}
 
 
 @app.get("/health")
 def health():
-    return {"status": "active"}
+    return {"status": "active", "role": "orchestrator"}

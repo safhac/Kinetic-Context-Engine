@@ -1,23 +1,26 @@
-from pydantic import BaseModel, Field, validator
-from typing import Dict, Any, Optional
-from datetime import datetime
+from pydantic import BaseModel, Field
+from typing import List, Dict, Optional
 
-class VideoMetadata(BaseModel):
-    source_id: str = Field(..., description="Unique device or camera ID")
-    timestamp: float = Field(..., description="Unix timestamp of recording")
-    # Strict regex enforces resolution format (e.g., "1920x1080")
-    resolution: str = Field(..., pattern="^\\d+x\\d+$", example="1920x1080")
+# --- NEW ARCHITECTURE SCHEMAS ---
 
-class TelemetryPayload(BaseModel):
-    session_id: str
-    metadata: VideoMetadata
-    # Flexible dictionary for raw sensor readings (gyroscope, accelerometer)
-    sensor_data: Dict[str, Any] = Field(..., description="Raw sensor readings (gyro, accel)")
-    frame_data: Optional[str] = Field(None, description="Base64 encoded video frame")
 
-    # Custom validator to ensure sensor data isn't empty
-    @validator('sensor_data')
-    def validate_sensor_data(cls, v):
-        if not v:
-            raise ValueError("Sensor data cannot be empty")
-        return v
+class VideoIngestRequest(BaseModel):
+    """
+    Contract for /internal/ingest/video
+    Used when Gateway hands off a full video file.
+    """
+    task_id: str
+    file_path: str
+    context: str = "general"
+    original_name: str
+    # The Ingestion Service uses this list to trigger specific Kafka topics
+    pipelines: List[str] = Field(default=["face", "body", "audio"])
+
+
+class TaskDispatch(BaseModel):
+    """
+    Contract for /internal/dispatch/{type}
+    Used for direct injection (e.g., just trigger Body Worker)
+    """
+    task_id: str
+    metadata: Dict = Field(default_factory=dict)
