@@ -131,7 +131,7 @@ services:
   # --- SERVICE 1: API GATEWAY (Public Facing) ---
   api-gateway:
     build: 
-      context: ./api-gateway
+      context: ../api-gateway
       dockerfile: Dockerfile
     container_name: kce-gateway
     ports: ["8000:8000"]
