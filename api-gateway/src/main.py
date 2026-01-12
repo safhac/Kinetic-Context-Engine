@@ -34,6 +34,19 @@ app.add_middleware(
 )
 
 
+# Mount Static UI
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# --- GLOBAL STATE (Broadcaster Pattern) ---
+# Maps task_id -> List[asyncio.Queue]
+# When Kafka says "Task X done", we put data in all Queues for Task X.
+active_connections: Dict[str, List[asyncio.Queue]] = {}
+
+# --- KAFKA LIFECYCLE ---
+producer = None
+consumer = None
+
+
 @app.post("/process/body")
 async def process_body(task: ImageTask):
     # producer.send('body-tasks', json.dumps(task.dict()).encode('utf-8'))
