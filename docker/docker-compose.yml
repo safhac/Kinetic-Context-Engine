@@ -126,9 +126,7 @@ services:
       KAFKA_TOPIC_FACE: face-tasks
       KAFKA_TOPIC_BODY: body-tasks
       KAFKA_TOPIC_AUDIO: audio-tasks
-    depends_on:
-      - kafka
-      
+
 
   # --- SERVICE 1: API GATEWAY (Public Facing) ---
   api-gateway:
