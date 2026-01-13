@@ -80,6 +80,31 @@ async def upload_file(file: UploadFile = File(...), context: str = Form("general
 
     return {"task_id": task_id, "status": "queued"}
 
+# UPDATED ROUTE: Changed from "/stream/{task_id}" to "/ingest/stream/{task_id}"
+
+
+@app.get("/ingest/stream/{task_id}")
+async def stream(request: Request, task_id: str):
+    async def generator():
+        q = asyncio.Queue()
+        if task_id not in active_connections:
+            active_connections[task_id] = []
+        active_connections[task_id].append(q)
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    data = await asyncio.wait_for(q.get(), timeout=15)
+                    yield f"data: {json.dumps(data)}\n\n"
+                    if data.get("status") in ["completed", "failed"]:
+                        break
+                except asyncio.TimeoutError:
+                    yield ": keep-alive\n\n"
+        finally:
+            active_connections[task_id].remove(q)
+    return StreamingResponse(generator(), media_type="text/event-stream")
+
 
 @app.post("/internal/ingest/video")
 async def ingest_video(request: VideoIngestRequest):
