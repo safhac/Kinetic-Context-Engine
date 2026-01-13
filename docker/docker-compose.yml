@@ -69,7 +69,7 @@ services:
         PYTHONPATH: /app:/app/ai-workers
         PYTHONUNBUFFERED: 1
         KAFKA_BROKER: kafka:29092
-        SOURCE_TOPIC: raw_telemetry
+        SOURCE_TOPIC: face-tasks
         DEST_TOPIC: processed_signals
       depends_on:
         kafka:
@@ -88,7 +88,7 @@ services:
       PYTHONPATH: /app:/app/ai-workers
       PYTHONUNBUFFERED: 1
       KAFKA_BROKER: kafka:29092
-      SOURCE_TOPIC: raw_telemetry
+      SOURCE_TOPIC: body-tasks
       DEST_TOPIC: processed_signals
     depends_on:
       kafka:
@@ -101,7 +101,7 @@ services:
         dockerfile: ai-workers/audio_worker/Dockerfile
       environment:
         KAFKA_BROKER: kafka:29092
-        SOURCE_TOPIC: raw_audio_chunk
+        SOURCE_TOPIC: audio-tasks
         DEST_TOPIC: processed_signals
         PYTHONPATH: /app/context-engine:/app/context-engine/src
       depends_on:
