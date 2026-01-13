@@ -25,9 +25,11 @@ def main():
     consumer = KafkaConsumer(
         SOURCE_TOPIC,
         bootstrap_servers=KAFKA_BROKER,
-        auto_offset_reset='latest',
-        group_id='kce-audio-worker',
-        value_deserializer=lambda x: json.loads(x.decode('utf-8'))
+        value_deserializer=lambda m: json.loads(m.decode('utf-8')),
+        group_id="kce-audio-worker",
+        session_timeout_ms=60000,
+        heartbeat_interval_ms=10000,
+        max_poll_interval_ms=900000
     )
 
     producer = KafkaProducer(
