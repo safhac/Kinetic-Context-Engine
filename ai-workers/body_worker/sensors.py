@@ -1,15 +1,14 @@
-from shared.sensor_interface import SensorInterface
-import mediapipe as mp
-import numpy as np
-import cv2
-from typing import List, Dict, Any
-# Fix import path to find the shared folder at root
 import sys
 import os
+import cv2
+import numpy as np
+import mediapipe as mp
+from typing import List, Dict, Any
+
+# Ensure we can find shared modules if needed
 sys.path.append(os.getcwd())
 
-# from body_worker.pose_signals import detect_body_gestures
-# --- FIX: Direct import + Correct function name ---
+# --- IMPORT FIX ---
 try:
     from pose_signals import get_active_pose_signals
 except ImportError:
@@ -28,22 +27,30 @@ class MediaPipeBodySensor(SensorInterface):
         PoseLandmarkerOptions = mp.tasks.vision.PoseLandmarkerOptions
         VisionRunningMode = mp.tasks.vision.RunningMode
 
-        # 1. Check Environment Variable (Default to False for stability)
+        # 1. FIX PATH: Find the model file reliably
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        model_path = os.path.join(current_dir, 'pose_landmarker.task')
+
+        if not os.path.exists(model_path):
+            print(f"⚠️ WARNING: Model file not found at: {model_path}")
+            print("Did you run 'wget' to download pose_landmarker.task?")
+
+        # 2. Check Environment Variable (Default to False)
         enable_gpu = os.getenv("ENABLE_GPU", "false").lower() == "true"
 
-        # 2. Select Delegate Dynamically
+        # 3. Select Delegate Dynamically
         if enable_gpu:
-            print("🚀 Attempting to use GPU Delegate for Body Sensor...")
+            print("🚀 Body Worker: Attempting to use GPU Delegate...")
             selected_delegate = BaseOptions.Delegate.GPU
         else:
-            print("💻 Using CPU Delegate for Body Sensor (Default).")
+            print("💻 Body Worker: Using CPU Delegate (Default).")
             selected_delegate = BaseOptions.Delegate.CPU
 
-        # 3. Apply options
+        # 4. Apply options
         options = PoseLandmarkerOptions(
             base_options=BaseOptions(
-                model_asset_path='pose_landmarker.task',
-                delegate=selected_delegate  # <--- Dynamic Selection
+                model_asset_path=model_path,  # <--- Uses valid path
+                delegate=selected_delegate    # <--- Uses dynamic hardware
             ),
             running_mode=VisionRunningMode.VIDEO
         )
@@ -52,28 +59,22 @@ class MediaPipeBodySensor(SensorInterface):
     def process_frame(self, frame: np.ndarray, timestamp: float) -> List[Dict[str, Any]]:
         results_list = []
 
-        # 1. Convert to MediaPipe Image (Required for new API)
-        # Note: MediaPipe tasks expect RGB
+        # MediaPipe Tasks API requires RGB images
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
 
-        # 2. Use the NEW Landmarker (which uses your CPU/GPU settings)
-        # Timestamp must be in milliseconds (int)
+        # Detect
         detection_result = self.landmarker.detect_for_video(
             mp_image, int(timestamp))
 
-        # 3. Extract Landmarks
-        # The new API returns a list of lists (one list per person detected)
+        # Extract Results
         if detection_result.pose_landmarks:
-            # We assume single person for now (index 0)
+            # Get the first person detected
             landmarks = detection_result.pose_landmarks[0]
 
-            # 4. Pass to your logic
-            # IMPORTANT: 'landmarks' here is a list of NormalizedLandmark objects.
-            # If 'detect_body_gestures' expects the old protobuf format,
-            # you might need to adjust it slightly, but usually it's compatible
-            # (both have x, y, z, visibility attributes).
-            detected_signals = detect_body_gestures(landmarks)
+            # Use YOUR specific signal function
+            # Note: We pass 'landmarks' which is a list of NormalizedLandmark objects
+            detected_signals = get_active_pose_signals(landmarks)
 
             for signal in detected_signals:
                 signal['timestamp'] = timestamp
