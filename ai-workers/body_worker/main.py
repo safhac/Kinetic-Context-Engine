@@ -4,7 +4,7 @@ import json
 import base64
 import cv2
 import numpy as np
-from kafka import KafkaConsumer, KafkaProducer, KafkaConnectionError
+from kafka import KafkaConsumer, KafkaProducer
 import sys
 
 # Ensure we can import from the sibling directory
