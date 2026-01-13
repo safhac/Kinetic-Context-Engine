@@ -55,6 +55,8 @@ services:
       SOURCE_TOPIC: processed_signals
       CONSUMER_GROUP: kce-context-group
     restart: always
+    volumes:
+      - ../temp_media:/app/media
 
   # 2. Face Worker (Sensation Layer - Kafka Consumer)
   ai-worker-face:
@@ -116,6 +118,8 @@ services:
       depends_on:
         kafka:
           condition: service_healthy
+      volumes:
+      - ../temp_media:/app/media
   # --- PRODUCER / API ---
   
   ingestion-service:
