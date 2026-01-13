@@ -116,6 +116,7 @@ services:
     ports: ["8001:8001"]
     volumes:
       - ../temp_media:/app/media  # Shared Video Storage
+      - ../app/ingestion-service/src:/app/src  # <--- ADD THIS LINE
     depends_on:
       kafka:
         condition: service_healthy
@@ -126,7 +127,6 @@ services:
       KAFKA_TOPIC_FACE: face-tasks
       KAFKA_TOPIC_BODY: body-tasks
       KAFKA_TOPIC_AUDIO: audio-tasks
-
 
   # --- SERVICE 1: API GATEWAY (Public Facing) ---
   api-gateway:
