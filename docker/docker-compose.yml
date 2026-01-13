@@ -90,15 +90,15 @@ services:
       KAFKA_BROKER: kafka:29092
       SOURCE_TOPIC: body-tasks
       DEST_TOPIC: processed_signals
-      ENABLE_GPU: "true"
+      ENABLE_GPU: "false"
       
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+    #deploy:
+    #  resources:
+    #    reservations:
+    #      devices:
+    #        - driver: nvidia
+    #          count: 1
+    #          capabilities: [gpu]
     depends_on:
       kafka:
         condition: service_healthy
