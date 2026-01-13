@@ -40,7 +40,7 @@ def main():
             print(f"⚠️ Invalid or missing file path: {file_path}")
             continue
 
-        print(f"👁️ Processing Face Task: {session_id}")
+        print(f"👁️ Processing Face Task: {task_id}")
 
         try:
             cap = cv2.VideoCapture(file_path)
