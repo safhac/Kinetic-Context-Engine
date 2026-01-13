@@ -137,6 +137,7 @@ services:
     ports: ["8000:8000"]
     volumes:
       - ../temp_media:/app/media  # Write Access
+      - ../api-gateway/src:/app/src
     environment:
       INGESTION_SERVICE_URL: "http://ingestion-service:8000" # Direct link to Service 2
       KAFKA_BROKER: kafka:29092 # Only needed for SSE listening (Results)

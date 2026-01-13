@@ -24,9 +24,8 @@ TOPIC_MAP = {
 
 producer = None
 
+
 # --- LIFECYCLE ---
-
-
 @app.on_event("startup")
 async def startup():
     global producer
@@ -52,58 +51,6 @@ async def dispatch_to_kafka(topic: str, payload: dict):
         raise HTTPException(status_code=500, detail="Event Bus Failure")
 
 # --- ENDPOINTS ---
-
-
-@app.post("/ingest/upload")
-async def upload_file(file: UploadFile = File(...), context: str = Form("general")):
-    task_id = str(uuid.uuid4())
-    filename = f"{task_id}.{file.filename.split('.')[-1]}"
-    file_path = f"{UPLOAD_DIR}/{filename}"
-
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
-    # UPDATED PAYLOAD: Added 'pipelines' list required by Ingestion Service logic
-    payload = {
-        "task_id": task_id,
-        "file_path": file_path,
-        "context": context,
-        "original_name": file.filename,
-        "pipelines": ["face", "body", "audio"]
-    }
-
-    # Forward to Ingestion Service
-    async with httpx.AsyncClient() as client:
-        # Ensure INGESTION_URL matches the port in docker-compose (8000)
-        await client.post(f"{INGESTION_URL}/internal/ingest/video", json=payload)
-
-    return {"task_id": task_id, "status": "queued"}
-
-# UPDATED ROUTE: Changed from "/stream/{task_id}" to "/ingest/stream/{task_id}"
-
-
-@app.get("/ingest/stream/{task_id}")
-async def stream(request: Request, task_id: str):
-    async def generator():
-        q = asyncio.Queue()
-        if task_id not in active_connections:
-            active_connections[task_id] = []
-        active_connections[task_id].append(q)
-        try:
-            while True:
-                if await request.is_disconnected():
-                    break
-                try:
-                    data = await asyncio.wait_for(q.get(), timeout=15)
-                    yield f"data: {json.dumps(data)}\n\n"
-                    if data.get("status") in ["completed", "failed"]:
-                        break
-                except asyncio.TimeoutError:
-                    yield ": keep-alive\n\n"
-        finally:
-            active_connections[task_id].remove(q)
-    return StreamingResponse(generator(), media_type="text/event-stream")
 
 
 @app.post("/internal/ingest/video")
