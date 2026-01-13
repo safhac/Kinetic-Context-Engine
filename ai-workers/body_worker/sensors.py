@@ -48,26 +48,35 @@ class MediaPipeBodySensor(SensorInterface):
         )
         self.landmarker = PoseLandmarker.create_from_options(options)
 
-        self.mp_pose = mp.solutions.pose
-        self.pose = self.mp_pose.Pose(
-            static_image_mode=False,
-            model_complexity=1,
-            min_detection_confidence=0.5
-        )
-
     def process_frame(self, frame: np.ndarray, timestamp: float) -> List[Dict[str, Any]]:
-        results = []
-        # MediaPipe requires RGB
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        processed = self.pose.process(rgb_frame)
+        results_list = []
 
-        if processed.pose_landmarks:
-            # Delegate logic to the new file
-            detected_signals = detect_body_gestures(processed.pose_landmarks)
+        # 1. Convert to MediaPipe Image (Required for new API)
+        # Note: MediaPipe tasks expect RGB
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
+
+        # 2. Use the NEW Landmarker (which uses your CPU/GPU settings)
+        # Timestamp must be in milliseconds (int)
+        detection_result = self.landmarker.detect_for_video(
+            mp_image, int(timestamp))
+
+        # 3. Extract Landmarks
+        # The new API returns a list of lists (one list per person detected)
+        if detection_result.pose_landmarks:
+            # We assume single person for now (index 0)
+            landmarks = detection_result.pose_landmarks[0]
+
+            # 4. Pass to your logic
+            # IMPORTANT: 'landmarks' here is a list of NormalizedLandmark objects.
+            # If 'detect_body_gestures' expects the old protobuf format,
+            # you might need to adjust it slightly, but usually it's compatible
+            # (both have x, y, z, visibility attributes).
+            detected_signals = detect_body_gestures(landmarks)
 
             for signal in detected_signals:
                 signal['timestamp'] = timestamp
                 signal['source'] = 'mediapipe_body'
-                results.append(signal)
+                results_list.append(signal)
 
-        return results
+        return results_list
