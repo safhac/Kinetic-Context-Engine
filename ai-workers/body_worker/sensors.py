@@ -70,15 +70,16 @@ class MediaPipeBodySensor(SensorInterface):
         # Extract Results
         if detection_result.pose_landmarks:
             # Get the first person detected
-            landmarks = detection_result.pose_landmarks[0]
+            detected_signals_raw = get_active_pose_signals(landmarks)
 
-            # Use YOUR specific signal function
-            # Note: We pass 'landmarks' which is a list of NormalizedLandmark objects
-            detected_signals = get_active_pose_signals(landmarks)
-
-            for signal in detected_signals:
-                signal['timestamp'] = timestamp
-                signal['source'] = 'mediapipe_body'
-                results_list.append(signal)
+            for signal_name in detected_signals_raw:
+                # Convert the string name into a dictionary object
+                signal_obj = {
+                    "type": signal_name,  # e.g. "head_down"
+                    "timestamp": timestamp,
+                    "source": "mediapipe_body",
+                    "confidence": 1.0  # Placeholder
+                }
+                results_list.append(signal_obj)
 
         return results_list
