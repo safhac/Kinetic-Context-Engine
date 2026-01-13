@@ -91,6 +91,13 @@ services:
       SOURCE_TOPIC: body-tasks
       DEST_TOPIC: processed_signals
       - ENABLE_GPU=true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     depends_on:
       kafka:
         condition: service_healthy
