@@ -108,7 +108,7 @@ def main():
 
             # --- BROADCAST RESULT ---
             output_payload = {
-                "session_id": session_id,  # Frontend looks for this!
+                "task_id": session_id,  # Frontend looks for this!
                 "timestamp": payload.get("timestamp"),
                 "deception_score": round(brain.score, 2),
                 "triggers": triggered_updates,
