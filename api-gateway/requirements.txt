@@ -4,3 +4,4 @@ pydantic
 kafka-python
 aiokafka
 python-multipart
+httpx
