@@ -231,5 +231,71 @@ def detect_security_check(lm):
 
 def detect_foot_withdrawal(lm):
     # Sudden movement of ankles
+    # ensure the function name is 'detect_sudden_velocity'
     left_move = detect_sudden_velocity(lm[27], "left_ankle_pos", 0.05)
-    right_move = detect_sudden_
+    right_move = detect_sudden_velocity(lm[28], "right_ankle_pos", 0.05)
+    return left_move or right_move
+
+
+def detect_binding_legs(lm):
+    # Ankles locked together
+    return _dist(lm[27], lm[28]) < 0.1
+
+
+def detect_inward_toe_pointing(lm):
+    # Toes pointing inward
+    # Vector: Heel to Foot Index
+    l_toe_vec = lm[31].x - lm[29].x
+    r_toe_vec = lm[32].x - lm[30].x
+    # Left toe points Right (>0), Right toe points Left (<0)
+    return l_toe_vec > 0 and r_toe_vec < 0
+
+
+def detect_pelvic_tilt(lm):
+    # Forward (confidence) vs Backward (retreat)
+    mid_hip_z = (lm[23].z + lm[24].z) / 2
+    mid_shoulder_z = (lm[11].z + lm[12].z) / 2
+    return "forward" if mid_hip_z < mid_shoulder_z else "backward"
+
+
+def detect_adams_apple_jump(lm):
+    # Sudden rise of the throat area
+    return detect_vertical_surge(lm, area="throat")
+
+
+def detect_baton_gestures(lm):
+    # Rhythmic hand beating
+    return detect_rhythmic_punctuation(lm[15])
+
+
+def detect_asynchronous_baton(lm, audio_input):
+    # Placeholder logic: Compares baton rhythm with speech rhythm.
+    # Returns True if NOT synced.
+    #
+    is_moving = detect_rhythmic_punctuation(lm[15])
+    # Assume audio_input has property .is_speaking or .amplitude
+    # This is a stub for the logic described in File 1
+    if is_moving and audio_input and not audio_input.is_speaking:
+        return True
+    return False
+
+
+def detect_object_barrier(lm, object_centroids):
+    # Object placed between subject and camera
+    torso_z = lm[1].z
+    for obj in object_centroids:
+        # Check if object Z is closer to camera than torso Z
+        if obj.z < torso_z:
+            # Simplified "in front" check: Object X is within shoulder width
+            shoulders_min_x = min(lm[11].x, lm[12].x)
+            shoulders_max_x = max(lm[11].x, lm[12].x)
+            if shoulders_min_x < obj.x < shoulders_max_x:
+                return True
+    return False
+
+
+def detect_property_interaction(lm, other_property_bounds):
+    # Wrist entering someone else's space
+    if is_inside(lm[15], other_property_bounds):
+        return True
+    return False
