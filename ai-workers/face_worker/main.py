@@ -32,7 +32,7 @@ def main():
 
     for message in consumer:
         payload = message.value
-        session_id = payload.get("session_id")
+        task_id = payload.get("task_id") or payload.get("session_id")
         # 2. FIX: specific key for file processing
         file_path = payload.get("file_path")
 
@@ -43,7 +43,6 @@ def main():
         print(f"👁️ Processing Face Task: {session_id}")
 
         try:
-            # 3. FIX: Open Video File instead of decoding single frame
             cap = cv2.VideoCapture(file_path)
             fps = cap.get(cv2.CAP_PROP_FPS) or 30
             frame_count = 0
@@ -55,8 +54,6 @@ def main():
                     break
 
                 timestamp = frame_count / fps
-
-                # Process Frame
                 signals = sensor.process_frame(frame, timestamp)
                 all_signals.extend(signals)
 
@@ -66,19 +63,18 @@ def main():
 
             cap.release()
 
-            # 4. Produce Result
             if all_signals:
                 output = {
-                    "session_id": session_id,
+                    "task_id": task_id,  # <--- FIX: Send back task_id
                     "signals": all_signals,
                     "type": "face_analysis",
                     "meta": {"worker": "face_worker_v1", "frames_processed": frame_count}
                 }
                 producer.send(DEST_TOPIC, output)
                 print(
-                    f"✅ Finished Face Task: {session_id} ({len(all_signals)} signals found)")
+                    f"✅ Finished Face Task: {task_id} ({len(all_signals)} signals found)")
             else:
-                print(f"⚠️ No face signals detected for {session_id}")
+                print(f"⚠️ No face signals detected for {task_id}")
 
         except Exception as e:
             print(f"❌ Error processing video: {e}")
