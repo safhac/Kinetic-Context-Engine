@@ -50,6 +50,9 @@ async def ingest_video(request: VideoIngestRequest):
     payload = request.dict()
     triggered = []
 
+    redis_client.set(f"path:{task.task_id}", task.file_path)
+    redis_client.set(f"pending:{task.task_id}", 3)
+
     for pipeline in request.pipelines:
         if pipeline in TOPIC_MAP:
             target_topic = TOPIC_MAP[pipeline]
