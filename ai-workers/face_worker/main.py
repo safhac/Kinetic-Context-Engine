@@ -1,24 +1,22 @@
 import os
 import json
-import base64
 import cv2
-import numpy as np
+import time
 from kafka import KafkaConsumer, KafkaProducer
-from sensors import MediaPipeFaceSensor, OpenFaceSensor
+from sensors import MediaPipeFaceSensor
 
 # Configuration
 KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:9092")
-SOURCE_TOPIC = os.getenv("SOURCE_TOPIC", "raw-telemetry")
-DEST_TOPIC = os.getenv("DEST_TOPIC", "processed-signals")
+SOURCE_TOPIC = os.getenv("SOURCE_TOPIC", "face-tasks")
+DEST_TOPIC = os.getenv("DEST_TOPIC", "interpreted_context")
 
-def decode_frame(base64_string):
-    nparr = np.frombuffer(base64.b64decode(base64_string), np.uint8)
-    return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
 def main():
+    # 1. FIX: Added group_id to ensure robust consumption
     consumer = KafkaConsumer(
         SOURCE_TOPIC,
         bootstrap_servers=KAFKA_BROKER,
+        group_id='kce-face-worker',
         value_deserializer=lambda m: json.loads(m.decode('utf-8'))
     )
     producer = KafkaProducer(
@@ -26,40 +24,65 @@ def main():
         value_serializer=lambda v: json.dumps(v).encode('utf-8')
     )
 
-    # Initialize Sensors via Interface
-    sensors = [MediaPipeFaceSensor(), OpenFaceSensor()]
+    # Initialize Sensor
+    # Note: Ensure you are using the fixed sensors.py with static_image_mode=True
+    sensor = MediaPipeFaceSensor()
+
     print(f"👁️ Face Worker Started. Listening on {SOURCE_TOPIC}...")
 
     for message in consumer:
         payload = message.value
         session_id = payload.get("session_id")
-        frame_data = payload.get("frame_data")
-        timestamp = payload.get("timestamp", 0)
+        # 2. FIX: specific key for file processing
+        file_path = payload.get("file_path")
 
-        if not frame_data:
+        if not file_path or not os.path.exists(file_path):
+            print(f"⚠️ Invalid or missing file path: {file_path}")
             continue
 
+        print(f"👁️ Processing Face Task: {session_id}")
+
         try:
-            frame = decode_frame(frame_data)
-            detected_signals = []
+            # 3. FIX: Open Video File instead of decoding single frame
+            cap = cv2.VideoCapture(file_path)
+            fps = cap.get(cv2.CAP_PROP_FPS) or 30
+            frame_count = 0
+            all_signals = []
 
-            # Polymorphic processing
-            for sensor in sensors:
+            while cap.isOpened():
+                ret, frame = cap.read()
+                if not ret:
+                    break
+
+                timestamp = frame_count / fps
+
+                # Process Frame
                 signals = sensor.process_frame(frame, timestamp)
-                detected_signals.extend(signals)
+                all_signals.extend(signals)
 
-            # Produce signals if any found
-            if detected_signals:
+                frame_count += 1
+                if frame_count % 60 == 0:
+                    print(f"   ...processed {frame_count} frames")
+
+            cap.release()
+
+            # 4. Produce Result
+            if all_signals:
                 output = {
                     "session_id": session_id,
-                    "signals": detected_signals,
-                    "meta": {"worker": "face_worker_v1"}
+                    "signals": all_signals,
+                    "type": "face_analysis",
+                    "meta": {"worker": "face_worker_v1", "frames_processed": frame_count}
                 }
                 producer.send(DEST_TOPIC, output)
-                print(f"✅ Sent {len(detected_signals)} signals for {session_id}")
+                print(
+                    f"✅ Finished Face Task: {session_id} ({len(all_signals)} signals found)")
+            else:
+                print(f"⚠️ No face signals detected for {session_id}")
 
         except Exception as e:
-            print(f"❌ Error processing frame: {e}")
+            print(f"❌ Error processing video: {e}")
+
 
 if __name__ == "__main__":
     main()
