@@ -57,7 +57,7 @@ async def result_listener():
 # --- UPLOAD ENDPOINT ---
 
 
-@app.post("/upload")
+@app.post("/ingest/upload")
 async def upload_file(file: UploadFile = File(...), context: str = Form("general")):
     task_id = str(uuid.uuid4())
     filename = f"{task_id}.{file.filename.split('.')[-1]}"
