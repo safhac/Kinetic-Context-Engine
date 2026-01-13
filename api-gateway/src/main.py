@@ -44,7 +44,24 @@ async def startup():
 
 async def result_listener():
     consumer = AIOKafkaConsumer(TOPIC_RESULTS, bootstrap_servers=KAFKA_BROKER)
-    await consumer.start()
+
+    # --- RETRY LOGIC START ---
+    max_retries = 10
+    for attempt in range(max_retries):
+        try:
+            logger.info(
+                f"Connecting to Kafka (Attempt {attempt+1}/{max_retries})...")
+            await consumer.start()
+            logger.info("✅ Successfully connected to Kafka.")
+            break
+        except KafkaConnectionError:
+            if attempt == max_retries - 1:
+                logger.error("❌ Max retries reached. Kafka is unavailable.")
+                raise
+            logger.warning("Kafka not ready. Retrying in 5 seconds...")
+            await asyncio.sleep(5)
+    # --- RETRY LOGIC END ---
+
     try:
         async for msg in consumer:
             data = json.loads(msg.value)
@@ -54,7 +71,6 @@ async def result_listener():
                     await q.put(data)
     finally:
         await consumer.stop()
-
 # --- UPLOAD ENDPOINT ---
 
 
