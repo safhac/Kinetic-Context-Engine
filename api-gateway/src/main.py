@@ -5,7 +5,7 @@ import json
 import logging
 import httpx
 import asyncio
-from typing import Dict
+from typing import Dict, List
 from fastapi import FastAPI, UploadFile, File, Form, Request, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
