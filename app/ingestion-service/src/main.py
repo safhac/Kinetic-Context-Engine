@@ -5,7 +5,7 @@ from fastapi import FastAPI, HTTPException
 from aiokafka import AIOKafkaProducer
 
 # Import ONLY the new schemas
-from schemas import VideoIngestRequest, TaskDispatch
+from .schemas import VideoIngestRequest, TaskDispatch
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ingestion-service")
