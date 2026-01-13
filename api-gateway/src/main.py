@@ -107,7 +107,7 @@ async def process_audio(task: TaskModel):
 # --- SSE STREAM ---
 
 
-@app.get("/stream/{task_id}")
+@app.get("/ingest/stream/{task_id}")
 async def stream(request: Request, task_id: str):
     async def generator():
         q = asyncio.Queue()
