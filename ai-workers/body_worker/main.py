@@ -1,28 +1,31 @@
+from body_worker.sensors import MediaPipeBodySensor
 import os
 import json
 import base64
 import cv2
 import numpy as np
-from kafka import KafkaConsumer, KafkaProducer
+from kafka import KafkaConsumer, KafkaProducer, KafkaConnectionError
 import sys
 
 # Ensure we can import from the sibling directory
 sys.path.append(os.getcwd())
 # Import the BODY sensor we just created
-from body_worker.sensors import MediaPipeBodySensor
 
 # Configuration
 KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:9092")
-SOURCE_TOPIC = os.getenv("SOURCE_TOPIC", "raw_telemetry") # Listening to the same raw stream
+# Listening to the same raw stream
+SOURCE_TOPIC = os.getenv("SOURCE_TOPIC", "raw_telemetry")
 DEST_TOPIC = os.getenv("DEST_TOPIC", "processed_signals")
+
 
 def decode_frame(base64_string):
     nparr = np.frombuffer(base64.b64decode(base64_string), np.uint8)
     return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
+
 def main():
     print(f"💪 Body Worker initializing on {KAFKA_BROKER}...")
-    
+
     # Consumer
     consumer = KafkaConsumer(
         SOURCE_TOPIC,
@@ -30,9 +33,9 @@ def main():
         value_deserializer=lambda m: json.loads(m.decode('utf-8')),
         # CRITICAL: Use a DIFFERENT group_id than the Face Worker.
         # This ensures Kafka sends the message to BOTH workers (Fan-Out), not just one.
-        group_id="kce-body-worker" 
+        group_id="kce-body-worker"
     )
-    
+
     # Producer
     producer = KafkaProducer(
         bootstrap_servers=KAFKA_BROKER,
@@ -53,7 +56,7 @@ def main():
                 continue
 
             frame = decode_frame(frame_data)
-            
+
             # Extract Signals
             signals = sensor.process_frame(frame, timestamp)
 
@@ -68,6 +71,7 @@ def main():
 
         except Exception as e:
             print(f"❌ Error: {e}")
+
 
 if __name__ == "__main__":
     main()
