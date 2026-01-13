@@ -1,40 +1,33 @@
 import os
 import json
 import logging
+import librosa
 from kafka import KafkaConsumer, KafkaProducer
 from audio_processor import AudioProcessor
 
-# Import your linguistic logic
-try:
-    from verbal_signals import get_active_verbal_signals
-except ImportError:
-    # Use standard import if running in Docker with correct PYTHONPATH
-    from verbal_signals import get_active_verbal_signals
-
-# Setup Logging
+# Logging Setup
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("audio-worker")
 
-# Kafka Configuration
+# Configuration
 KAFKA_BROKER = os.environ.get("KAFKA_BROKER", "kafka:29092")
-SOURCE_TOPIC = os.environ.get(
-    "SOURCE_TOPIC", "raw_audio_chunk")  # Distinct topic for audio
+SOURCE_TOPIC = os.environ.get("SOURCE_TOPIC", "audio-tasks")
 DEST_TOPIC = os.environ.get("DEST_TOPIC", "processed_signals")
 
 
 def main():
     logger.info("👂 Audio Worker Starting...")
 
-    # 1. Initialize Processor
-    processor = AudioProcessor(buffer_duration=4.0)  # Process every 4 seconds
+    # Initialize Processor (No buffer duration needed for full file processing)
+    processor = AudioProcessor()
 
-    # 2. Connect to Kafka
     consumer = KafkaConsumer(
         SOURCE_TOPIC,
         bootstrap_servers=KAFKA_BROKER,
         auto_offset_reset='latest',
-        group_id='kce-audio-worker'
+        group_id='kce-audio-worker',
+        value_deserializer=lambda x: json.loads(x.decode('utf-8'))
     )
 
     producer = KafkaProducer(
@@ -46,39 +39,39 @@ def main():
 
     for message in consumer:
         try:
-            # Assume message.value is raw bytes of audio chunk
-            # If you wrap it in JSON, you'll need to decode it first
-            is_ready = processor.add_audio_chunk(message.value)
+            task = message.value
+            logger.info(f"Processing Task: {task.get('task_id')}")
 
-            if is_ready:
-                logger.info("Processing Audio Buffer...")
-                text, pitch = processor.process_buffer()
+            # 1. Get File Path
+            file_path = task.get("file_path")
+            if not file_path or not os.path.exists(file_path):
+                logger.error(f"File not found: {file_path}")
+                continue
 
-                if text:
-                    logger.info(
-                        f"🗣️ Transcript: '{text}' (Pitch: {pitch:.1f}Hz)")
+            # 2. Load Audio from Disk (Resample to 16k for Whisper)
+            logger.info(f"Loading audio from {file_path}...")
+            # librosa loads as float32 automatically
+            audio_array, _ = librosa.load(file_path, sr=16000)
 
-                    # 3. Analyze Signals
-                    signals = get_active_verbal_signals(
-                        text,
-                        current_pitch=pitch,
-                        baseline_pitch=processor.baseline_pitch
-                    )
+            # 3. Process the Full Audio
+            text, pitch = processor.process_array(audio_array)
 
-                    # 4. Broadcast Signals
-                    for sig in signals:
-                        output = {
-                            "signal": sig,
-                            "intensity": 1.0,  # Could scale based on pitch deviation
-                            "timestamp": message.timestamp / 1000.0,
-                            "source": "audio_analysis",
-                            "metadata": {"text_fragment": text}
-                        }
-                        producer.send(DEST_TOPIC, output)
-                        logger.info(f"⚡ Sent Signal: {sig}")
+            if text:
+                logger.info(
+                    f"🗣️ Transcript: '{text[:50]}...' (Pitch: {pitch:.1f}Hz)")
+
+                output = {
+                    "task_id": task.get("task_id"),
+                    "signal": "verbal_analysis",
+                    "text": text,
+                    "pitch": pitch,
+                    "source": "audio_analysis"
+                }
+                producer.send(DEST_TOPIC, output)
+                logger.info(f"⚡ Sent Result")
 
         except Exception as e:
-            logger.error(f"Error processing audio chunk: {e}")
+            logger.error(f"Error processing audio task: {e}")
 
 
 if __name__ == "__main__":
