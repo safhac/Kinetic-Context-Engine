@@ -1,4 +1,6 @@
 from typing import List, Optional
+import parselmouth
+import numpy as np
 
 
 def get_active_verbal_signals(text: str, current_pitch: float = None, baseline_pitch: float = None) -> List[str]:
