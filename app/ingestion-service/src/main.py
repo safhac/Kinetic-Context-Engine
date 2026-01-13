@@ -1,7 +1,7 @@
 import os
 import json
 import logging
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from aiokafka import AIOKafkaProducer
 
 # Import ONLY the new schemas
