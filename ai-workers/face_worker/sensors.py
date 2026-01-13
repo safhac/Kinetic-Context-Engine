@@ -19,7 +19,10 @@ class MediaPipeFaceSensor(SensorInterface):
     def __init__(self):
         self.mp_face_mesh = mp.solutions.face_mesh
         self.face_mesh = self.mp_face_mesh.FaceMesh(
-            static_image_mode=False,
+            # 1. FIX: Set to True to force processing frames independently (CPU-safe)
+            # 'False' treats it as a video stream and tries to open an OpenGL context for tracking.
+            static_image_mode=True,
+
             max_num_faces=1,
             refine_landmarks=True,
             min_detection_confidence=0.5
@@ -30,14 +33,14 @@ class MediaPipeFaceSensor(SensorInterface):
 
         # 1. Convert to RGB for MediaPipe
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+        # In the legacy API, .process() is used for both static and video modes
         processed = self.face_mesh.process(rgb_frame)
 
         if processed.multi_face_landmarks:
             for face_landmarks in processed.multi_face_landmarks:
 
                 # 2. CALL SIGNAL DETECTION WITH FRAME
-                # We pass 'frame' (the original BGR image) for color analysis
-                # We pass 'pose_landmarks=None' because this worker doesn't have body data yet
                 active_signals = get_active_face_signals(
                     face_landmarks=face_landmarks,
                     pose_landmarks=None,
