@@ -88,3 +88,40 @@ def detect_vocal_pitch_rise(current_pitch: float, baseline_pitch: float) -> bool
     if baseline_pitch <= 0:
         return False
     return current_pitch > (baseline_pitch * 1.2)
+
+
+def analyze_pitch_gestures(audio_path):
+    """
+    Detects 'gestures' in how words are spoken.
+    """
+    sound = parselmouth.Sound(audio_path)
+
+    # Extract Pitch (F0)
+    pitch = sound.to_pitch()
+    pitch_values = pitch.selected_array['frequency']
+
+    # Filter out 0s (silence/unvoiced)
+    pitch_values = pitch_values[pitch_values > 0]
+
+    if len(pitch_values) == 0:
+        return []
+
+    signals = []
+
+    # --- Gesture 1: Rising Intonation (Question/Uncertainty) ---
+    # Compare average of first half vs second half
+    mid_point = len(pitch_values) // 2
+    start_avg = np.mean(pitch_values[:mid_point])
+    end_avg = np.mean(pitch_values[mid_point:])
+
+    if end_avg > start_avg * 1.2:  # 20% rise
+        signals.append("rising_intonation")
+
+    # --- Gesture 2: High Energy / Shouting ---
+    intensity = sound.to_intensity()
+    max_intensity = np.max(intensity.values)
+
+    if max_intensity > 80:  # dB threshold
+        signals.append("high_volume_spike")
+
+    return signals
