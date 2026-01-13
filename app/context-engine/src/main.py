@@ -8,7 +8,6 @@ from kafka import KafkaConsumer, KafkaProducer
 try:
     from deception_model import DeceptionModel
 except ImportError:
-    # Fallback for local testing if not running as a module
     from .deception_model import DeceptionModel
 
 # 1. Setup Logging
@@ -21,6 +20,7 @@ logger = logging.getLogger("kce-context-engine")
 
 # 2. Configuration
 KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:9092")
+# or 'interpreted_context' if using that
 SOURCE_TOPIC = os.getenv("SOURCE_TOPIC", "processed_signals")
 DEST_TOPIC = os.getenv("DEST_TOPIC", "interpreted_context")
 
@@ -33,7 +33,7 @@ def main():
         consumer = KafkaConsumer(
             SOURCE_TOPIC,
             bootstrap_servers=KAFKA_BROKER,
-            group_id="kce-context-group-v2",  # Version 2 (Stateful)
+            group_id="kce-context-group-v3",  # Bumped version to force fresh read
             auto_offset_reset='latest',
             value_deserializer=lambda m: json.loads(m.decode('utf-8'))
         )
@@ -47,7 +47,6 @@ def main():
         return
 
     # 4. Initialize Session Memory
-    # We store a separate 'Brain' (DeceptionModel) for every user session.
     active_sessions = {}
 
     # 5. Main Loop
@@ -57,15 +56,27 @@ def main():
         try:
             payload = message.value
 
-            # --- DATA ADAPTER ---
-            # Handle single signal vs list of signals
+            # --- DATA ADAPTER (FIXED) ---
+            # 1. Extract Signals
             if "signals" in payload:
                 incoming_signals = payload["signals"]
-                session_id = payload.get("session_id", "unknown_session")
             else:
+                # Handle single signal payload
                 incoming_signals = [payload]
-                session_id = payload.get("metadata", {}).get(
-                    "session_id", "default_session")
+
+            # 2. Extract ID (Robust Check)
+            # Workers might send 'task_id', 'session_id', or 'id'
+            session_id = (
+                payload.get("task_id") or
+                payload.get("session_id") or
+                payload.get("id") or
+                payload.get("metadata", {}).get("session_id") or
+                "unknown_session"
+            )
+
+            if session_id == "unknown_session":
+                # Optional: print raw keys to debug if it fails again
+                logger.warning(f"⚠️ payload keys: {list(payload.keys())}")
 
             # --- SESSION MANAGEMENT ---
             if session_id not in active_sessions:
@@ -75,24 +86,29 @@ def main():
             brain = active_sessions[session_id]
 
             # --- CORE LOGIC: UPDATE SCORE ---
-            # We apply a small decay (cooling off) on every new message
             brain.decay()
 
             triggered_updates = []
 
             for sig_data in incoming_signals:
-                sig_name = sig_data.get("signal")
-                intensity = sig_data.get("intensity", 1.0)
+                # Handle both string (from list) and dict (from single) formats if necessary
+                if isinstance(sig_data, str):
+                    # If the list is just strings like ['lips_compressed', ...]
+                    sig_name = sig_data
+                    intensity = 1.0
+                elif isinstance(sig_data, dict):
+                    sig_name = sig_data.get("signal") or sig_data.get("type")
+                    intensity = sig_data.get("intensity", 1.0)
+                else:
+                    continue
 
                 if sig_name:
-                    # Update the math model
                     brain.update_score(sig_name, intensity)
                     triggered_updates.append(sig_name)
 
             # --- BROADCAST RESULT ---
-            # We broadcast every update so the frontend can animate the stress bar
             output_payload = {
-                "session_id": session_id,
+                "session_id": session_id,  # Frontend looks for this!
                 "timestamp": payload.get("timestamp"),
                 "deception_score": round(brain.score, 2),
                 "triggers": triggered_updates,
@@ -101,11 +117,10 @@ def main():
 
             producer.send(DEST_TOPIC, output_payload)
 
-            # Console Feedback for Debugging
             if triggered_updates:
                 log_icon = "🚨" if brain.score > 7.0 else "🧠"
                 logger.info(
-                    f"{log_icon} [Session: {session_id[:8]}] Score: {brain.score:.2f} | Detected: {triggered_updates}")
+                    f"{log_icon} [Session: {session_id[:8]}] Score: {brain.score:.2f} | Detected: {len(triggered_updates)} signals")
 
         except Exception as e:
             logger.error(f"⚠️ Error processing message: {e}")
