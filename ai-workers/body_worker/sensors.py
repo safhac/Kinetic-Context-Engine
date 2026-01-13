@@ -22,6 +22,32 @@ class SensorInterface:
 
 class MediaPipeBodySensor(SensorInterface):
     def __init__(self):
+        BaseOptions = mp.tasks.BaseOptions
+        PoseLandmarker = mp.tasks.vision.PoseLandmarker
+        PoseLandmarkerOptions = mp.tasks.vision.PoseLandmarkerOptions
+        VisionRunningMode = mp.tasks.vision.RunningMode
+
+        # 1. Check Environment Variable (Default to False for stability)
+        enable_gpu = os.getenv("ENABLE_GPU", "false").lower() == "true"
+
+        # 2. Select Delegate Dynamically
+        if enable_gpu:
+            print("🚀 Attempting to use GPU Delegate for Body Sensor...")
+            selected_delegate = BaseOptions.Delegate.GPU
+        else:
+            print("💻 Using CPU Delegate for Body Sensor (Default).")
+            selected_delegate = BaseOptions.Delegate.CPU
+
+        # 3. Apply options
+        options = PoseLandmarkerOptions(
+            base_options=BaseOptions(
+                model_asset_path='pose_landmarker.task',
+                delegate=selected_delegate  # <--- Dynamic Selection
+            ),
+            running_mode=VisionRunningMode.VIDEO
+        )
+        self.landmarker = PoseLandmarker.create_from_options(options)
+
         self.mp_pose = mp.solutions.pose
         self.pose = self.mp_pose.Pose(
             static_image_mode=False,
