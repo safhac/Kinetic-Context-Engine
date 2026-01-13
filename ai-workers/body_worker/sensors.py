@@ -8,6 +8,7 @@ import sys
 import os
 sys.path.append(os.getcwd())
 
+# from body_worker.pose_signals import detect_body_gestures
 # --- FIX: Direct import + Correct function name ---
 try:
     from pose_signals import get_active_pose_signals
