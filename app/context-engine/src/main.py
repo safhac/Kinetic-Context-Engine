@@ -4,7 +4,6 @@ import logging
 import sys
 from kafka import KafkaConsumer, KafkaProducer
 
-# ✅ CLEAN IMPORT: Relies on PYTHONPATH, not sys.path hacks
 try:
     from deception_model import DeceptionModel
 except ImportError:
@@ -20,7 +19,6 @@ logger = logging.getLogger("kce-context-engine")
 
 # 2. Configuration
 KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:9092")
-# or 'interpreted_context' if using that
 SOURCE_TOPIC = os.getenv("SOURCE_TOPIC", "processed_signals")
 DEST_TOPIC = os.getenv("DEST_TOPIC", "interpreted_context")
 
@@ -33,7 +31,7 @@ def main():
         consumer = KafkaConsumer(
             SOURCE_TOPIC,
             bootstrap_servers=KAFKA_BROKER,
-            group_id="kce-context-group-v3",  # Bumped version to force fresh read
+            group_id="kce-context-group-v4",  # Bumped version
             auto_offset_reset='latest',
             value_deserializer=lambda m: json.loads(m.decode('utf-8'))
         )
@@ -54,46 +52,39 @@ def main():
 
     for message in consumer:
         try:
-            payload = message.value
+            payload = message.value  # <--- 'payload' IS DEFINED HERE
 
-            # --- DATA ADAPTER (FIXED) ---
-            # 1. Extract Signals
+            # --- DATA ADAPTER ---
             if "signals" in payload:
                 incoming_signals = payload["signals"]
             else:
-                # Handle single signal payload
                 incoming_signals = [payload]
 
-            # 2. Extract ID (Robust Check)
-            # Workers might send 'task_id', 'session_id', or 'id'
-            session_id = (
+            # Robust ID Check
+            task_id = (
                 payload.get("task_id") or
                 payload.get("session_id") or
                 payload.get("id") or
-                payload.get("metadata", {}).get("session_id") or
                 "unknown_session"
             )
 
-            if session_id == "unknown_session":
-                # Optional: print raw keys to debug if it fails again
-                logger.warning(f"⚠️ payload keys: {list(payload.keys())}")
+            if task_id == "unknown_session":
+                continue
 
             # --- SESSION MANAGEMENT ---
-            if session_id not in active_sessions:
-                active_sessions[session_id] = DeceptionModel()
-                logger.info(f"🆕 New Session Tracking: {session_id}")
+            if task_id not in active_sessions:
+                active_sessions[task_id] = DeceptionModel()
+                logger.info(f"🆕 New Session Tracking: {task_id}")
 
-            brain = active_sessions[session_id]
+            brain = active_sessions[task_id]
 
-            # --- CORE LOGIC: UPDATE SCORE ---
+            # --- CORE LOGIC ---
             brain.decay()
-
             triggered_updates = []
 
             for sig_data in incoming_signals:
-                # Handle both string (from list) and dict (from single) formats if necessary
+                # Handle string vs dict formats
                 if isinstance(sig_data, str):
-                    # If the list is just strings like ['lips_compressed', ...]
                     sig_name = sig_data
                     intensity = 1.0
                 elif isinstance(sig_data, dict):
@@ -106,21 +97,31 @@ def main():
                     brain.update_score(sig_name, intensity)
                     triggered_updates.append(sig_name)
 
-            # --- BROADCAST RESULT ---
+            # --- PREPARE OUTPUT ---
+
+            # Check if the worker sent us a finished video link
+            download_link = payload.get("artifact_url")
+
             output_payload = {
-                "task_id": session_id,  # Frontend looks for this!
+                "task_id": task_id,
                 "timestamp": payload.get("timestamp"),
                 "deception_score": round(brain.score, 2),
                 "triggers": triggered_updates,
-                "alert_level": "HIGH" if brain.score > 7.0 else "NORMAL"
+                "alert_level": "HIGH" if brain.score > 7.0 else "NORMAL",
+
+                # ✅ ADDED: Pass the link to the frontend
+                "download_url": download_link
             }
 
             producer.send(DEST_TOPIC, output_payload)
 
-            if triggered_updates:
+            # Logging
+            if download_link:
+                logger.info(f"🔗 Forwarding Video Link for {task_id}")
+            elif triggered_updates:
                 log_icon = "🚨" if brain.score > 7.0 else "🧠"
                 logger.info(
-                    f"{log_icon} [Session: {session_id[:8]}] Score: {brain.score:.2f} | Detected: {len(triggered_updates)} signals")
+                    f"{log_icon} [{task_id[:8]}] Score: {brain.score:.2f} | Detected: {len(triggered_updates)}")
 
         except Exception as e:
             logger.error(f"⚠️ Error processing message: {e}")
