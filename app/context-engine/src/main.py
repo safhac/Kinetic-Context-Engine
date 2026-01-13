@@ -108,8 +108,6 @@ def main():
                 "deception_score": round(brain.score, 2),
                 "triggers": triggered_updates,
                 "alert_level": "HIGH" if brain.score > 7.0 else "NORMAL",
-
-                # ✅ ADDED: Pass the link to the frontend
                 "download_url": download_link
             }
 
