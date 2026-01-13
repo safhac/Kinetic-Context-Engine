@@ -11,6 +11,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from aiokafka import AIOKafkaConsumer
+from aiokafka.errors import KafkaConnectionError
 from pydantic import BaseModel
 
 logging.basicConfig(level=logging.INFO)
