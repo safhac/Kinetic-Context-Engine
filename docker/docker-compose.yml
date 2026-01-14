@@ -191,3 +191,8 @@ services:
       - ../temp_media:/usr/share/nginx/media:ro  
     depends_on:
       - ingestion-service
+
+
+networks:
+  kce-network:
+    driver: bridge
