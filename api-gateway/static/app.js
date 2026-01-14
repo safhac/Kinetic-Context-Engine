@@ -69,10 +69,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function renderWorkerLink(data) {
-    if (!data.download_url) return;
+    // Only proceed if this is the final merged file from the Merger Service
+    if (data.worker_type !== 'trinity' || !data.download_url) return;
+
     resultDiv.style.display = 'block';
 
-    // Ensure container exists
+    // 1. Create or Clear Container
     let container = document.getElementById('vtt-container');
     if (!container) {
       container = document.createElement('div');
@@ -80,16 +82,14 @@ document.addEventListener('DOMContentLoaded', () => {
       container.className = 'download-section';
       resultDiv.appendChild(container);
     }
+    container.innerHTML = ''; // Ensure no "general" or "partial" buttons remain
 
-    // Prevent duplicates
-    const workerId = `link-${data.worker_type}`;
-    if (document.getElementById(workerId)) return;
-
+    // 2. Create the Single "Trinity" Button
     const link = document.createElement('a');
-    link.id = workerId;
     link.href = `${API_BASE}${data.download_url}`;
-    link.className = "download-btn";
-    link.innerText = `📥 ${data.worker_type.toUpperCase()} VTT`;
+    link.className = "download-btn trinity-focus";
+    // We name it to match the task_id so players auto-detect it
+    link.innerText = `📥 Download Subtitles (${data.task_id}.vtt)`;
 
     container.appendChild(link);
   }
