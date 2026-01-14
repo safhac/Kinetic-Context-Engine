@@ -8,7 +8,6 @@ from kafka import KafkaConsumer, KafkaProducer
 from vtoe_adapter import VToEAdapter
 
 sys.path.append("/app")
-sys.path.append(os.getcwd())
 
 # --- CONFIG ---
 KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:29092")
@@ -16,7 +15,6 @@ SOURCE_TOPIC = os.getenv("SOURCE_TOPIC", "audio-tasks")
 DEST_TOPIC = os.getenv("DEST_TOPIC", "processed_signals")
 RESULTS_DIR = "/app/media/results"
 
-processor = AudioProcessor()
 adapter = VToEAdapter()
 
 
