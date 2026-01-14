@@ -33,6 +33,26 @@ class VideoProfile(BaseModel):
     duration: float
     view_type: str  # 'headshot' | 'full'
 
+    @staticmethod
+    def profile(file_path):
+        cmd = [
+            "ffprobe", "-v", "quiet", "-print_format", "json",
+            "-show_streams", "-show_format", file_path
+        ]
+        res = json.loads(subprocess.check_output(cmd))
+
+        # Logic to determine view type and constraints
+        streams = res.get('streams', [])
+        video = next(s for s in streams if s['codec_type'] == 'video')
+        audio = next((s for s in streams if s['codec_type'] == 'audio'), None)
+
+        return {
+            "is_vertical": int(video['height']) > int(video['width']),
+            "has_audio": audio is not None,
+            "duration": float(res['format']['duration']),
+            "view_type": "headshot" if int(video['height']) < 720 else "full"
+        }
+
 
 class GestureSignal(BaseModel):
     task_id: str
