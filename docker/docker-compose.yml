@@ -62,7 +62,7 @@ services:
   ai-worker-face:
       build:
         context: ..
-        dockerfile: ai-workers/Dockerfile
+        dockerfile: ai-workers/face_worker/Dockerfile
       command: python ai-workers/face_worker/main.py
       volumes:
         - ../temp_media:/app/media
@@ -81,7 +81,7 @@ services:
   ai-worker-body:
     build:
       context: ..
-      dockerfile: ai-workers/Dockerfile
+      dockerfile: ai-workers/body_worker/Dockerfile
     command: python ai-workers/body_worker/main.py
     volumes:
       - ../temp_media:/app/media
@@ -111,15 +111,18 @@ services:
       context: ../
       dockerfile: ai-workers/audio_worker/Dockerfile
     environment:
-      - KAFKA_BROKER=kafka:29092
-      - SOURCE_TOPIC=audio-tasks
-      - DEST_TOPIC=processed_signals
+      KAFKA_BROKER: kafka:29092
+      SOURCE_TOPIC: audio-tasks
+      DEST_TOPIC: processed_signals
+      # FIX: Point PYTHONPATH to /app so it can see 'shared' and 'audio_worker'
+      PYTHONPATH: /app:/app/ai-workers
     depends_on:
       kafka:
         condition: service_healthy
     volumes:
       - ../temp_media:/app/media
       - ../shared:/app/shared
+  # --- PRODUCER / API ---
   
   ingestion-service:
     build:
