@@ -4,7 +4,7 @@ import sys
 import numpy as np
 import parselmouth
 from kafka import KafkaConsumer, KafkaProducer
-from audio_worker.vtoe_adapter import VToEAdapter
+from vtoe_adapter import VToEAdapter
 
 sys.path.append(os.getcwd())
 
