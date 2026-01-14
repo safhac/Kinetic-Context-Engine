@@ -3,65 +3,63 @@ import json
 import cv2
 import sys
 import mediapipe as mp
-from mediapipe.framework.formats import landmark_pb2
 from kafka import KafkaConsumer, KafkaProducer
 from body_worker.sensors import MediaPipeBodySensor
 
-# Ensure imports work
 sys.path.append(os.getcwd())
 
 # --- CONFIGURATION ---
 KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:29092")
 SOURCE_TOPIC = os.getenv("SOURCE_TOPIC", "body-tasks")
 DEST_TOPIC = os.getenv("DEST_TOPIC", "processed_signals")
-RESULTS_DIR = "/app/media/results"  # Shared volume path
+RESULTS_DIR = "/app/media/results"
 
-# MediaPipe Drawing Utils
-mp_drawing = mp.solutions.drawing_utils
-mp_drawing_styles = mp.solutions.drawing_styles
-mp_pose = mp.solutions.pose
+# --- SIMPLE DICTIONARY (Mockup for now) ---
+# In a real app, this might come from a DB or config file
+GESTURE_MEANING = {
+    "hands_on_face": "Stress / Hiding emotion",
+    "arms_crossed": "Defensive / Closed off",
+    "fidgeting": "Nervousness / Deception",
+    "lean_forward": "Interest / Aggression",
+    "neutral": "Baseline"
+}
 
 
-def draw_landmarks_on_image(rgb_image, detection_result):
-    """
-    Draws the skeleton on the frame.
-    """
-    pose_landmarks_list = detection_result.pose_landmarks
-    annotated_image = rgb_image.copy()
+def ms_to_vtt_time(ms):
+    """Converts milliseconds to VTT timestamp format HH:MM:SS.mmm"""
+    seconds = int(ms / 1000)
+    millis = int(ms % 1000)
+    minutes = int(seconds / 60)
+    hours = int(minutes / 60)
 
-    # Loop through the detected poses (usually just 1)
-    for idx in range(len(pose_landmarks_list)):
-        pose_landmarks = pose_landmarks_list[idx]
+    seconds = seconds % 60
+    minutes = minutes % 60
 
-        # Convert the new API "NormalizedLandmark" object to the old Protobuf format
-        # required by mp_drawing.draw_landmarks
-        pose_landmarks_proto = landmark_pb2.NormalizedLandmarkList()
-        pose_landmarks_proto.landmark.extend([
-            landmark_pb2.NormalizedLandmark(
-                x=landmark.x, y=landmark.y, z=landmark.z)
-            for landmark in pose_landmarks
-        ])
+    return f"{hours:02}:{minutes:02}:{seconds:02}.{millis:03}"
 
-        mp_drawing.draw_landmarks(
-            annotated_image,
-            pose_landmarks_proto,
-            mp_pose.POSE_CONNECTIONS,
-            mp_drawing_styles.get_default_pose_landmarks_style())
 
-    return annotated_image
+def write_vtt(filename, captions):
+    """Writes a list of captions to a .vtt file"""
+    with open(filename, 'w', encoding='utf-8') as f:
+        f.write("WEBVTT\n\n")
+        for cap in captions:
+            start = ms_to_vtt_time(cap['start'])
+            end = ms_to_vtt_time(cap['end'])
+            text = cap['text']
+            f.write(f"{start} --> {end}\n")
+            f.write(f"{text}\n\n")
 
 
 def main():
-    print(f"💪 Body Worker (With Drawing) initializing...")
+    print(f"💪 Body Analyst (Subtitle Mode) initializing...")
     os.makedirs(RESULTS_DIR, exist_ok=True)
 
     consumer = KafkaConsumer(
         SOURCE_TOPIC,
         bootstrap_servers=KAFKA_BROKER,
         value_deserializer=lambda m: json.loads(m.decode('utf-8')),
-        group_id="kce-body-worker-drawing-v1",  # Changed group ID to force fresh start
-        session_timeout_ms=60000,
-        heartbeat_interval_ms=10000
+        group_id="kce-body-worker-vtt-v1",
+        session_timeout_ms=60000
     )
     producer = KafkaProducer(
         bootstrap_servers=KAFKA_BROKER,
@@ -69,7 +67,7 @@ def main():
     )
 
     sensor = MediaPipeBodySensor()
-    print(f"✅ Body Worker Listening...")
+    print(f"✅ Body Analyst Listening...")
 
     for message in consumer:
         try:
@@ -81,21 +79,15 @@ def main():
                 print(f"⚠️ File not found: {file_path}")
                 continue
 
-            print(f"💪 Processing & Drawing: {task_id}")
+            print(f"💪 Analyzing Body Language: {task_id}")
 
-            # 1. Setup Video Input
             cap = cv2.VideoCapture(file_path)
-            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
 
-            # 2. Setup Video Output (The Result)
-            output_filename = f"{task_id}_labeled.mp4"
-            output_path = os.path.join(RESULTS_DIR, output_filename)
-
-            # Try codec mp4v (widely supported in containers)
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+            # Helper to group continuous signals
+            current_signal = None
+            start_time = 0
+            captions = []
 
             frame_count = 0
 
@@ -106,80 +98,72 @@ def main():
 
                 timestamp_ms = cap.get(cv2.CAP_PROP_POS_MSEC)
 
-                # --- SENSOR PROCESS ---
-                # We perform detection directly here to get BOTH signals and drawing data.
-                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                mp_image = mp.Image(
-                    image_format=mp.ImageFormat.SRGB, data=rgb_frame)
+                # Process Frame (No drawing, just data)
+                signals_list = sensor.process_frame(frame, timestamp_ms)
 
-                # Use the sensor's internal landmarker to detect
-                detection_result = sensor.landmarker.detect(mp_image)
+                # Extract primary signal (simplify to the first one for subtitles)
+                # In the future: handle multiple concurrent signals
+                active_gesture = None
+                if signals_list:
+                    # Robust extraction (fixing your previous error)
+                    raw_signal = signals_list[0]
+                    active_gesture = raw_signal.get('signal') if isinstance(
+                        raw_signal, dict) else str(raw_signal)
 
-                # 1. Extract Signals (Re-using logic helper if available, or simplified here)
-                signals = []
-                # (Note: In a real refactor, you'd expose 'get_signals' from your sensor class)
-                # For now, we will trust the sensor.process_frame logic if needed,
-                # but to draw, we rely on detection_result.
+                # --- AGGREGATION LOGIC ---
+                # Only write a subtitle if the gesture CHANGES or ENDS
+                if active_gesture != current_signal:
+                    if current_signal:
+                        # Close the previous caption
+                        meaning = GESTURE_MEANING.get(
+                            current_signal, "Unclassified gesture")
+                        captions.append({
+                            "start": start_time,
+                            "end": timestamp_ms,
+                            "text": f"BODY: {current_signal.upper()} ({meaning})"
+                        })
 
-                # Let's call the standard process to get the signals for the DB
-                # This is slightly inefficient (double process) but safest for your current code structure
-                # without breaking 'sensor.py'.
-                signals = sensor.process_frame(frame, timestamp_ms)
-
-                # 2. Draw Skeleton
-                annotated_frame = frame.copy()
-                if detection_result.pose_landmarks:
-                    annotated_frame = draw_landmarks_on_image(
-                        rgb_frame, detection_result)
-                    annotated_frame = cv2.cvtColor(
-                        annotated_frame, cv2.COLOR_RGB2BGR)
-
-                # 3. Draw HUD (Text Overlay)
-                if signals:
-                    # FIX: Extract the signal name from the dict.
-                    # We assume the key is 'signal', but fallback to str(s) if missing.
-                    signal_names = [s.get('signal', str(s)) if isinstance(
-                        s, dict) else str(s) for s in signals]
-
-                    text = f"Detected: {', '.join(signal_names)}"
-
-                    # Draw text with a black outline for visibility
-                    cv2.putText(annotated_frame, text, (10, 50),
-                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 4, cv2.LINE_AA)
-                    cv2.putText(annotated_frame, text, (10, 50),
-                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
-
-                # Write frame to output video
-                out.write(annotated_frame)
-
-                # Send signals to Context Engine
-                if signals:
-                    producer.send(DEST_TOPIC, {
-                        "task_id": task_id,
-                        "timestamp": timestamp_ms,
-                        "signals": signals,
-                        "meta": {"worker": "body_worker"}
-                    })
+                    # Start new caption
+                    if active_gesture:
+                        current_signal = active_gesture
+                        start_time = timestamp_ms
+                    else:
+                        current_signal = None
 
                 frame_count += 1
-                if frame_count % 60 == 0:
-                    print(f"   ...processed {frame_count} frames")
+                if frame_count % 300 == 0:
+                    print(f"   ...analyzed {frame_count} frames")
+
+            # Close final caption if exists
+            if current_signal:
+                total_duration = cap.get(cv2.CAP_PROP_POS_MSEC)
+                meaning = GESTURE_MEANING.get(
+                    current_signal, "Unclassified gesture")
+                captions.append({
+                    "start": start_time,
+                    "end": total_duration,
+                    "text": f"BODY: {current_signal.upper()} ({meaning})"
+                })
 
             cap.release()
-            out.release()
 
-            # --- FINAL STEP: Notify Context Engine about the Video ---
+            # Save VTT
+            output_filename = f"{task_id}_body.vtt"
+            output_path = os.path.join(RESULTS_DIR, output_filename)
+            write_vtt(output_path, captions)
+
+            print(f"✅ VTT Generated: {output_path}")
+
+            # Notify Context Engine (Send the VTT path, NOT a video path)
             artifact_msg = {
                 "task_id": task_id,
                 "timestamp": timestamp_ms,
                 "signals": [],
-                # URL for frontend
                 "artifact_url": f"/media/results/{output_filename}",
+                "artifact_type": "subtitle",
                 "status": "completed"
             }
             producer.send(DEST_TOPIC, artifact_msg)
-
-            print(f"✅ Video Saved: {output_path}")
 
         except Exception as e:
             print(f"❌ Error: {e}")
