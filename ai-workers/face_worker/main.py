@@ -17,7 +17,7 @@ STATUS_TOPIC = os.getenv("DEST_TOPIC", "processed_signals")
 
 
 def main():
-    print(f"🙂 Face Analyst initializing (Signal Mode)...")
+    print(f"🙂 Face Analyst initializing (Grace Mode)...")
 
     consumer = KafkaConsumer(
         SOURCE_TOPIC,
@@ -47,57 +47,54 @@ def main():
             if not file_path or not os.path.exists(file_path):
                 continue
 
-            print(f"🙂 Analyzing Face: {task_id}")
             cap = cv2.VideoCapture(file_path)
 
-            # 2. Debouncing state
+            # --- GRACE LOGIC STATE ---
             last_signal = None
+            last_seen_time = 0
+            GRACE_PERIOD = 0.5
 
             while cap.isOpened():
                 ret, frame = cap.read()
                 if not ret:
                     break
 
-                # Convert to seconds for the schema
                 timestamp_sec = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
 
-                # Run Detection
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 mp_image = mp.Image(
                     image_format=mp.ImageFormat.SRGB, data=rgb_frame)
                 detection_result = sensor.landmarker.detect(mp_image)
 
+                active_code = None
                 if detection_result.face_landmarks:
                     raw_landmarks = detection_result.face_landmarks[0]
                     current_codes = ftoe.analyze_frame(
                         raw_landmarks, frame=frame)
-
                     if current_codes:
                         active_code = current_codes[0]
 
-                        # 3. Emit only on signal change
-                        if active_code != last_signal:
-                            signal = GestureSignal(
-                                task_id=task_id,
-                                worker_type="face",
-                                timestamp=timestamp_sec,
-                                text=active_code,
-                                confidence=1.0
-                            )
-                            producer.send(RAW_SIGNAL_TOPIC,
-                                          signal.model_dump())
-                            last_signal = active_code
-                    else:
+                # --- HYSTERESIS ENGINE ---
+                if active_code:
+                    if active_code != last_signal:
+                        signal = GestureSignal(
+                            task_id=task_id,
+                            worker_type="face",
+                            timestamp=timestamp_sec,
+                            text=active_code,
+                            confidence=1.0
+                        )
+                        producer.send(RAW_SIGNAL_TOPIC, signal.model_dump())
+                        last_signal = active_code
+
+                    last_seen_time = timestamp_sec
+                else:
+                    if last_signal and (timestamp_sec - last_seen_time > GRACE_PERIOD):
                         last_signal = None
 
             cap.release()
-
-            # 4. Notify Orchestrator of completion
             producer.send(STATUS_TOPIC, {
-                "task_id": task_id,
-                "worker_type": "face",
-                "status": "signals_sent"
-            })
+                          "task_id": task_id, "worker_type": "face", "status": "signals_sent"})
 
         except Exception as e:
             print(f"❌ Error in Face Worker: {e}")
