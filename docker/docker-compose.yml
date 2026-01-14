@@ -111,18 +111,15 @@ services:
       context: ../
       dockerfile: ai-workers/audio_worker/Dockerfile
     environment:
-      KAFKA_BROKER: kafka:29092
-      SOURCE_TOPIC: audio-tasks
-      DEST_TOPIC: processed_signals
-      # FIX: Point PYTHONPATH to /app so it can see 'shared' and 'audio_worker'
-      PYTHONPATH: /app:/app/ai-workers
+      - KAFKA_BROKER=kafka:29092
+      - SOURCE_TOPIC=audio-tasks
+      - DEST_TOPIC=processed_signals
     depends_on:
       kafka:
         condition: service_healthy
     volumes:
       - ../temp_media:/app/media
       - ../shared:/app/shared
-  # --- PRODUCER / API ---
   
   ingestion-service:
     build:
