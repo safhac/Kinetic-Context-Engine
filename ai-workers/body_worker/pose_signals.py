@@ -8,82 +8,8 @@ _pose_history = {
     "left_wrist_y": []      # For baton gestures
 }
 
-# --- Main Signal Aggregator ---
-
-
-def get_active_pose_signals(pose_landmarks, object_centroids=None, other_property_bounds=None, audio_input=None):
-    """
-    Checks ALL implemented signals against the current frame.
-    Args:
-        pose_landmarks: List of NormalizedLandmark objects from MediaPipe.
-        object_centroids: List of (x,y,z) tuples for external objects (optional).
-        other_property_bounds: Dict {'x_min', ...} for property interaction (optional).
-        audio_input: Audio rhythm data for sync detection (optional).
-    """
-    signals = []
-
-    # --- CRITICAL FIX: The input IS the list of landmarks ---
-    lm = pose_landmarks
-
-    # --- Basic Posture ---
-    if detect_head_downcast(lm):
-        signals.append("head_down")
-
-    shrug = detect_shoulder_shrug(lm)
-    if shrug:
-        signals.append(shrug)
-
-    # --- Hand/Arm Gestures ---
-    if detect_protecting_gesture(lm):
-        signals.append("arms_crossed")
-    if detect_steepling(lm):
-        signals.append("steepling")
-    if detect_elbow_closure(lm):
-        signals.append("elbow_closure")
-    if detect_ventilation(lm):
-        signals.append("ventilation")
-    if detect_security_check(lm):
-        signals.append("security_check")
-
-    # --- Leg/Foot Gestures ---
-    if detect_foot_withdrawal(lm):
-        signals.append("foot_withdrawal")
-    if detect_binding_legs(lm):
-        signals.append("binding_legs")
-    if detect_inward_toe_pointing(lm):
-        signals.append("inward_toe_pointing")
-
-    # --- Rhythmic/Micro Expressions ---
-    if detect_adams_apple_jump(lm):
-        signals.append("adams_apple_jump")
-
-    if detect_baton_gestures(lm):
-        signals.append("baton_gesture")
-        # Advanced: Check sync if audio is provided
-        if audio_input and detect_asynchronous_baton(lm, audio_input):
-            signals.append("async_baton_gesture")
-
-    # --- Interaction with Environment ---
-    if object_centroids and detect_object_barrier(lm, object_centroids):
-        signals.append("object_barrier")
-
-    if other_property_bounds and detect_property_interaction(lm, other_property_bounds):
-        signals.append("interaction_others_property")
-
-    # --- Status Indicators ---
-    # Pelvic Tilt returns a specific state string
-    tilt = detect_pelvic_tilt(lm)
-    if tilt:
-        signals.append(f"pelvic_tilt_{tilt}")
-
-    # Generic Hand Raise (Wrist higher than Nose)
-    if lm[15].y < lm[0].y:
-        signals.append("hand_raise")
-
-    return signals
-
-
 # --- Helpers ---
+
 
 def is_inside(point, bounds):
     """Checks if a point is inside a bounding box dict."""
@@ -231,7 +157,6 @@ def detect_security_check(lm):
 
 def detect_foot_withdrawal(lm):
     # Sudden movement of ankles
-    # ensure the function name is 'detect_sudden_velocity'
     left_move = detect_sudden_velocity(lm[27], "left_ankle_pos", 0.05)
     right_move = detect_sudden_velocity(lm[28], "right_ankle_pos", 0.05)
     return left_move or right_move
@@ -270,11 +195,7 @@ def detect_baton_gestures(lm):
 
 def detect_asynchronous_baton(lm, audio_input):
     # Placeholder logic: Compares baton rhythm with speech rhythm.
-    # Returns True if NOT synced.
-    #
     is_moving = detect_rhythmic_punctuation(lm[15])
-    # Assume audio_input has property .is_speaking or .amplitude
-    # This is a stub for the logic described in File 1
     if is_moving and audio_input and not audio_input.is_speaking:
         return True
     return False
@@ -284,9 +205,7 @@ def detect_object_barrier(lm, object_centroids):
     # Object placed between subject and camera
     torso_z = lm[1].z
     for obj in object_centroids:
-        # Check if object Z is closer to camera than torso Z
         if obj.z < torso_z:
-            # Simplified "in front" check: Object X is within shoulder width
             shoulders_min_x = min(lm[11].x, lm[12].x)
             shoulders_max_x = max(lm[11].x, lm[12].x)
             if shoulders_min_x < obj.x < shoulders_max_x:
@@ -299,3 +218,68 @@ def detect_property_interaction(lm, other_property_bounds):
     if is_inside(lm[15], other_property_bounds):
         return True
     return False
+
+
+# --- Main Signal Aggregator ---
+
+def get_active_pose_signals(pose_landmarks, object_centroids=None, other_property_bounds=None, audio_input=None):
+    """
+    Checks ALL implemented signals against the current frame.
+    """
+    signals = []
+    lm = pose_landmarks
+
+    # Basic Posture
+    if detect_head_downcast(lm):
+        signals.append("head_down")
+
+    shrug = detect_shoulder_shrug(lm)
+    if shrug:
+        signals.append(shrug)
+
+    # Hand/Arm Gestures
+    if detect_protecting_gesture(lm):
+        signals.append("arms_crossed")
+    if detect_steepling(lm):
+        signals.append("steepling")
+    if detect_elbow_closure(lm):
+        signals.append("elbow_closure")
+    if detect_ventilation(lm):
+        signals.append("ventilation")
+    if detect_security_check(lm):
+        signals.append("security_check")
+
+    # Leg/Foot Gestures
+    if detect_foot_withdrawal(lm):
+        signals.append("foot_withdrawal")
+    if detect_binding_legs(lm):
+        signals.append("binding_legs")
+    if detect_inward_toe_pointing(lm):
+        signals.append("inward_toe_pointing")
+
+    # Rhythmic/Micro Expressions
+    if detect_adams_apple_jump(lm):
+        signals.append("adams_apple_jump")
+
+    if detect_baton_gestures(lm):
+        signals.append("baton_gesture")
+        if audio_input and detect_asynchronous_baton(lm, audio_input):
+            signals.append("async_baton_gesture")
+
+    # Interaction with Environment
+    if object_centroids and detect_object_barrier(lm, object_centroids):
+        signals.append("object_barrier")
+
+    if other_property_bounds and detect_property_interaction(lm, other_property_bounds):
+        signals.append("interaction_others_property")
+
+    # Status Indicators
+    tilt = detect_pelvic_tilt(lm)
+    if tilt:
+        signals.append(f"pelvic_tilt_{tilt}")
+
+    # Generic Hand Raise
+    if lm[15].y < lm[0].y:
+        signals.append("hand_raise")
+
+    return signals
