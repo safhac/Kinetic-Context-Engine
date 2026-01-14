@@ -7,7 +7,7 @@ import httpx
 import asyncio
 from typing import Dict, List
 from fastapi import FastAPI, UploadFile, File, Form, Request, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from aiokafka import AIOKafkaConsumer
@@ -113,6 +113,8 @@ async def download_vtt(task_id: str, worker_type: str):
         filename=f"{task_id}_{worker_type}.vtt",
         media_type='text/vtt'
     )
+
+
 # --- RESTORED: SPECIFIC ENDPOINTS ---
 
 
