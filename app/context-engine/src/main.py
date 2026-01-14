@@ -109,6 +109,7 @@ def main():
                 "task_id": task_id,
                 "worker_type": worker_type,
                 "timestamp": payload.get("timestamp"),
+                "status": "worker_done" if download_link else "processing",
                 "deception_score": round(brain.score, 2),
                 "triggers": triggered_updates,
                 "alert_level": "HIGH" if brain.score > 7.0 else "NORMAL",
