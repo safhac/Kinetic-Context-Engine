@@ -1,56 +1,41 @@
+from shared.schemas import GestureSignal
 import os
 import json
 import cv2
 import sys
 import mediapipe as mp
 from kafka import KafkaConsumer, KafkaProducer
-from face_worker.sensors import MediaPipeFaceSensor
-from face_worker.ftoe_adapter import FToEAdapter
 
-sys.path.append(os.getcwd())
+# 1. Point to shared schemas
+sys.path.append("/app")
 
 # --- CONFIG ---
 KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:29092")
 SOURCE_TOPIC = os.getenv("SOURCE_TOPIC", "face-tasks")
-DEST_TOPIC = os.getenv("DEST_TOPIC", "processed_signals")
-RESULTS_DIR = "/app/media/results"
-
-
-def ms_to_vtt_time(ms):
-    seconds = int(ms / 1000)
-    millis = int(ms % 1000)
-    minutes = int(seconds / 60)
-    hours = int(minutes / 60)
-    return f"{hours:02}:{minutes % 60:02}:{seconds % 60:02}.{millis:03}"
-
-
-def write_vtt(filename, captions):
-    with open(filename, 'w', encoding='utf-8') as f:
-        f.write("WEBVTT\n\n")
-        for cap in captions:
-            f.write(
-                f"{ms_to_vtt_time(cap['start'])} --> {ms_to_vtt_time(cap['end'])}\n")
-            f.write(f"{cap['text']}\n\n")
+RAW_SIGNAL_TOPIC = "raw_signals"
+STATUS_TOPIC = os.getenv("DEST_TOPIC", "processed_signals")
 
 
 def main():
-    print(f"🙂 Face Analyst (Subtitle Mode) initializing...")
-    os.makedirs(RESULTS_DIR, exist_ok=True)
+    print(f"🙂 Face Analyst initializing (Signal Mode)...")
 
     consumer = KafkaConsumer(
         SOURCE_TOPIC,
         bootstrap_servers=KAFKA_BROKER,
         value_deserializer=lambda m: json.loads(m.decode('utf-8')),
-        group_id="kce-face-worker-vtt-v2",
-        session_timeout_ms=60000
+        group_id="kce-face-worker-v3"
     )
     producer = KafkaProducer(
         bootstrap_servers=KAFKA_BROKER,
         value_serializer=lambda v: json.dumps(v).encode('utf-8')
     )
 
+    from face_worker.sensors import MediaPipeFaceSensor
+    from face_worker.ftoe_adapter import FToEAdapter
+
     sensor = MediaPipeFaceSensor()
     ftoe = FToEAdapter()
+
     print(f"✅ Face Analyst Listening...")
 
     for message in consumer:
@@ -60,87 +45,62 @@ def main():
             file_path = payload.get("file_path")
 
             if not file_path or not os.path.exists(file_path):
-                print(f"⚠️ File not found: {file_path}")
                 continue
 
             print(f"🙂 Analyzing Face: {task_id}")
-
             cap = cv2.VideoCapture(file_path)
 
-            current_signal = None
-            start_time = 0
-            captions = []
-            frame_count = 0
+            # 2. Debouncing state
+            last_signal = None
 
             while cap.isOpened():
                 ret, frame = cap.read()
                 if not ret:
                     break
 
-                timestamp_ms = cap.get(cv2.CAP_PROP_POS_MSEC)
+                # Convert to seconds for the schema
+                timestamp_sec = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
 
-                # 1. Detect
-                # Note: sensors.py likely returns simplied list, but we want raw landmarks
-                # We will trigger the sensor primarily to get the landmarks for the Adapter
+                # Run Detection
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 mp_image = mp.Image(
                     image_format=mp.ImageFormat.SRGB, data=rgb_frame)
                 detection_result = sensor.landmarker.detect(mp_image)
 
-                # 2. Analyze with FToE Adapter
-                current_codes = []
                 if detection_result.face_landmarks:
-                    # FaceMesh usually returns list of faces, take first
                     raw_landmarks = detection_result.face_landmarks[0]
-                    # Pass frame for redness detection
                     current_codes = ftoe.analyze_frame(
                         raw_landmarks, frame=frame)
 
-                # 3. VTT Logic
-                active_code = current_codes[0] if current_codes else None
+                    if current_codes:
+                        active_code = current_codes[0]
 
-                if active_code != current_signal:
-                    if current_signal:
-                        captions.append({
-                            "start": start_time,
-                            "end": timestamp_ms,
-                            "text": f"FACE: {current_signal}"
-                        })
-
-                    if active_code:
-                        current_signal = active_code
-                        start_time = timestamp_ms
+                        # 3. Emit only on signal change
+                        if active_code != last_signal:
+                            signal = GestureSignal(
+                                task_id=task_id,
+                                worker_type="face",
+                                timestamp=timestamp_sec,
+                                text=active_code,
+                                confidence=1.0
+                            )
+                            producer.send(RAW_SIGNAL_TOPIC,
+                                          signal.model_dump())
+                            last_signal = active_code
                     else:
-                        current_signal = None
-
-                frame_count += 1
-                if frame_count % 300 == 0:
-                    print(f"   ...analyzed {frame_count} frames")
-
-            if current_signal:
-                captions.append({
-                    "start": start_time,
-                    "end": cap.get(cv2.CAP_PROP_POS_MSEC),
-                    "text": f"FACE: {current_signal}"
-                })
+                        last_signal = None
 
             cap.release()
 
-            output_filename = f"{task_id}_face.vtt"
-            output_path = os.path.join(RESULTS_DIR, output_filename)
-            write_vtt(output_path, captions)
-            print(f"✅ Face VTT Saved: {output_path}")
-
-            producer.send(DEST_TOPIC, {
+            # 4. Notify Orchestrator of completion
+            producer.send(STATUS_TOPIC, {
                 "task_id": task_id,
-                "timestamp": timestamp_ms,
-                "artifact_url": f"/media/results/{output_filename}",
-                "artifact_type": "subtitle",
-                "status": "completed"
+                "worker_type": "face",
+                "status": "signals_sent"
             })
 
         except Exception as e:
-            print(f"❌ Error: {e}")
+            print(f"❌ Error in Face Worker: {e}")
 
 
 if __name__ == "__main__":
