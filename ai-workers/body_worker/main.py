@@ -17,7 +17,7 @@ STATUS_TOPIC = os.getenv("DEST_TOPIC", "processed_signals")
 
 
 def main():
-    print(f"💪 Body Analyst initializing (Signal Mode)...")
+    print(f"💪 Body Analyst initializing (Grace Mode)...")
 
     consumer = KafkaConsumer(
         SOURCE_TOPIC,
@@ -47,11 +47,12 @@ def main():
             if not file_path or not os.path.exists(file_path):
                 continue
 
-            print(f"💪 Analyzing Body: {task_id}")
             cap = cv2.VideoCapture(file_path)
 
-            # 2. Tracking state for signal change (Debouncing)
+            # --- GRACE LOGIC STATE ---
             last_signal = None
+            last_seen_time = 0
+            GRACE_PERIOD = 0.5  # Seconds to hold a signal when landmarks vanish
 
             while cap.isOpened():
                 ret, frame = cap.read()
@@ -60,42 +61,42 @@ def main():
 
                 timestamp_sec = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
 
-                # Run Detection
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 mp_image = mp.Image(
                     image_format=mp.ImageFormat.SRGB, data=rgb_frame)
                 detection_result = sensor.landmarker.detect(mp_image)
 
+                active_code = None
                 if detection_result.pose_landmarks:
                     raw_landmarks = detection_result.pose_landmarks[0]
                     current_codes = btoe.analyze_frame(raw_landmarks)
-
                     if current_codes:
                         active_code = current_codes[0]
 
-                        # 3. Only emit if the gesture has changed (Avoid flooding Kafka)
-                        if active_code != last_signal:
-                            signal = GestureSignal(
-                                task_id=task_id,
-                                worker_type="body",
-                                timestamp=timestamp_sec,
-                                text=active_code,
-                                confidence=1.0
-                            )
-                            producer.send(RAW_SIGNAL_TOPIC,
-                                          signal.model_dump())
-                            last_signal = active_code
-                    else:
+                # --- HYSTERESIS ENGINE ---
+                if active_code:
+                    # If it's a brand new signal OR a different signal than before
+                    if active_code != last_signal:
+                        signal = GestureSignal(
+                            task_id=task_id,
+                            worker_type="body",
+                            timestamp=timestamp_sec,
+                            text=active_code,
+                            confidence=1.0
+                        )
+                        producer.send(RAW_SIGNAL_TOPIC, signal.model_dump())
+                        last_signal = active_code
+
+                    # Update the 'last seen' tracker whenever we have a hit
+                    last_seen_time = timestamp_sec
+                else:
+                    # Landmarks lost: Check if we have exceeded the grace period
+                    if last_signal and (timestamp_sec - last_seen_time > GRACE_PERIOD):
                         last_signal = None
 
             cap.release()
-
-            # 4. Notify completion
             producer.send(STATUS_TOPIC, {
-                "task_id": task_id,
-                "worker_type": "body",
-                "status": "signals_sent"
-            })
+                          "task_id": task_id, "worker_type": "body", "status": "signals_sent"})
 
         except Exception as e:
             print(f"❌ Error in Body Worker: {e}")
