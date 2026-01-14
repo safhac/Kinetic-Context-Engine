@@ -23,6 +23,7 @@ app = FastAPI(title="KCE Public Gateway")
 INGESTION_URL = os.getenv("INGESTION_SERVICE_URL",
                           "http://ingestion-service:8001")
 UPLOAD_DIR = "/app/media/uploads"
+RESULTS_DIR = "/app/media/results"
 KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:29092")
 TOPIC_RESULTS = "interpreted_context"
 
@@ -93,6 +94,25 @@ async def upload_file(file: UploadFile = File(...), context: str = Form("general
 
     return {"task_id": task_id, "status": "queued"}
 
+
+@app.get("/results/download/{task_id}/{worker_type}")
+async def download_vtt(task_id: str, worker_type: str):
+    """
+    Downloads the VTT file for a specific worker.
+    worker_type: 'body', 'face', or 'audio'
+    """
+    # Assuming your workers save as {task_id}_{type}.vtt
+    file_path = os.path.join(RESULTS_DIR, f"{task_id}_{worker_type}.vtt")
+
+    if not os.path.exists(file_path):
+        raise HTTPException(
+            status_code=404, detail="VTT file not found. Analysis may still be in progress.")
+
+    return FileResponse(
+        path=file_path,
+        filename=f"{task_id}_{worker_type}.vtt",
+        media_type='text/vtt'
+    )
 # --- RESTORED: SPECIFIC ENDPOINTS ---
 
 
