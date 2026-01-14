@@ -3,6 +3,7 @@ import json
 import sys
 import numpy as np
 import parselmouth
+import librosa
 from kafka import KafkaConsumer, KafkaProducer
 from vtoe_adapter import VToEAdapter
 
@@ -14,6 +15,9 @@ KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:29092")
 SOURCE_TOPIC = os.getenv("SOURCE_TOPIC", "audio-tasks")
 DEST_TOPIC = os.getenv("DEST_TOPIC", "processed_signals")
 RESULTS_DIR = "/app/media/results"
+
+processor = AudioProcessor()
+adapter = VToEAdapter()
 
 
 def ms_to_vtt_time(ms):
@@ -65,7 +69,15 @@ def main():
             print(f"🎤 Analyzing Audio: {task_id}")
 
             # 1. Load Audio with Praat
-            sound = parselmouth.Sound(file_path)
+            try:
+                # librosa.load extracts audio from video containers automatically
+                y, sr = librosa.load(file_path, sr=None)
+                sound = parselmouth.Sound(y, sampling_frequency=sr)
+            except Exception as e:
+                print(
+                    f"   ...Librosa fallback failed, trying direct load: {e}")
+                sound = parselmouth.Sound(file_path)
+
             total_duration = sound.get_total_duration()
 
             # 2. Calculate BASELINE PITCH (Global Average)
@@ -122,10 +134,9 @@ def main():
 
             producer.send(DEST_TOPIC, {
                 "task_id": task_id,
-                "timestamp": 0,
-                "artifact_url": f"/media/results/{output_filename}",
-                "artifact_type": "subtitle",
-                "status": "completed"
+                "worker_type": "audio",
+                "status": "completed",
+                "download_url": f"/results/download/{task_id}/audio"
             })
 
         except Exception as e:
