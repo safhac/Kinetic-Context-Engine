@@ -5,6 +5,7 @@ import sys
 import mediapipe as mp
 from kafka import KafkaConsumer, KafkaProducer
 from body_worker.sensors import MediaPipeBodySensor
+from body_worker.btoe_adapter import BToEAdapter
 
 sys.path.append(os.getcwd())
 
@@ -13,16 +14,6 @@ KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:29092")
 SOURCE_TOPIC = os.getenv("SOURCE_TOPIC", "body-tasks")
 DEST_TOPIC = os.getenv("DEST_TOPIC", "processed_signals")
 RESULTS_DIR = "/app/media/results"
-
-# --- SIMPLE DICTIONARY (Mockup for now) ---
-# In a real app, this might come from a DB or config file
-GESTURE_MEANING = {
-    "hands_on_face": "Stress / Hiding emotion",
-    "arms_crossed": "Defensive / Closed off",
-    "fidgeting": "Nervousness / Deception",
-    "lean_forward": "Interest / Aggression",
-    "neutral": "Baseline"
-}
 
 
 def ms_to_vtt_time(ms):
@@ -58,7 +49,7 @@ def main():
         SOURCE_TOPIC,
         bootstrap_servers=KAFKA_BROKER,
         value_deserializer=lambda m: json.loads(m.decode('utf-8')),
-        group_id="kce-body-worker-vtt-v1",
+        group_id="kce-body-worker-vtt-v2",
         session_timeout_ms=60000
     )
     producer = KafkaProducer(
@@ -67,6 +58,7 @@ def main():
     )
 
     sensor = MediaPipeBodySensor()
+    btoe = BToEAdapter()
     print(f"✅ Body Analyst Listening...")
 
     for message in consumer:
@@ -82,9 +74,8 @@ def main():
             print(f"💪 Analyzing Body Language: {task_id}")
 
             cap = cv2.VideoCapture(file_path)
-            fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
 
-            # Helper to group continuous signals
+            # Tracking state for subtitles
             current_signal = None
             start_time = 0
             captions = []
@@ -98,34 +89,35 @@ def main():
 
                 timestamp_ms = cap.get(cv2.CAP_PROP_POS_MSEC)
 
-                # Process Frame (No drawing, just data)
-                signals_list = sensor.process_frame(frame, timestamp_ms)
+                # 1. Run MediaPipe Detection
+                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                mp_image = mp.Image(
+                    image_format=mp.ImageFormat.SRGB, data=rgb_frame)
+                detection_result = sensor.landmarker.detect(mp_image)
 
-                # Extract primary signal (simplify to the first one for subtitles)
-                # In the future: handle multiple concurrent signals
-                active_gesture = None
-                if signals_list:
-                    # Robust extraction (fixing your previous error)
-                    raw_signal = signals_list[0]
-                    active_gesture = raw_signal.get('signal') if isinstance(
-                        raw_signal, dict) else str(raw_signal)
+                # 2. Get Signals from BToE Adapter
+                current_codes = []
+                if detection_result.pose_landmarks:
+                    # We usually only care about the first person detected [0]
+                    raw_landmarks = detection_result.pose_landmarks[0]
+                    current_codes = btoe.analyze_frame(raw_landmarks)
 
-                # --- AGGREGATION LOGIC ---
-                # Only write a subtitle if the gesture CHANGES or ENDS
-                if active_gesture != current_signal:
+                # 3. Aggregation Logic for VTT
+                # We prioritize the first detected code for the subtitle line
+                active_code = current_codes[0] if current_codes else None
+
+                if active_code != current_signal:
                     if current_signal:
                         # Close the previous caption
-                        meaning = GESTURE_MEANING.get(
-                            current_signal, "Unclassified gesture")
                         captions.append({
                             "start": start_time,
                             "end": timestamp_ms,
-                            "text": f"BODY: {current_signal.upper()} ({meaning})"
+                            "text": f"BODY: {current_signal}"
                         })
 
-                    # Start new caption
-                    if active_gesture:
-                        current_signal = active_gesture
+                    if active_code:
+                        # Start new caption
+                        current_signal = active_code
                         start_time = timestamp_ms
                     else:
                         current_signal = None
@@ -137,12 +129,10 @@ def main():
             # Close final caption if exists
             if current_signal:
                 total_duration = cap.get(cv2.CAP_PROP_POS_MSEC)
-                meaning = GESTURE_MEANING.get(
-                    current_signal, "Unclassified gesture")
                 captions.append({
                     "start": start_time,
                     "end": total_duration,
-                    "text": f"BODY: {current_signal.upper()} ({meaning})"
+                    "text": f"BODY: {current_signal}"
                 })
 
             cap.release()
@@ -154,11 +144,10 @@ def main():
 
             print(f"✅ VTT Generated: {output_path}")
 
-            # Notify Context Engine (Send the VTT path, NOT a video path)
+            # Notify Context Engine
             artifact_msg = {
                 "task_id": task_id,
                 "timestamp": timestamp_ms,
-                "signals": [],
                 "artifact_url": f"/media/results/{output_filename}",
                 "artifact_type": "subtitle",
                 "status": "completed"
