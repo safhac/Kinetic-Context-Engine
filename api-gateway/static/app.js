@@ -4,6 +4,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const statusDiv = document.getElementById('status');
   const resultDiv = document.getElementById('result');
 
+  // Hardcoded API Base to avoid NGINX/Port confusion
+  const API_BASE = "http://localhost:8000";
+
   uploadBtn.addEventListener('click', async () => {
     const file = fileInput.files[0];
     const context = document.getElementById('contextSelect').value;
@@ -20,7 +23,11 @@ document.addEventListener('DOMContentLoaded', () => {
     formData.append('context', context);
 
     try {
-      const res = await fetch('/ingest/upload', { method: 'POST', body: formData });
+      // Logic Fix: Use absolute path to bypass NGINX routing
+      const res = await fetch(`${API_BASE}/ingest/upload`, {
+        method: 'POST',
+        body: formData
+      });
 
       if (!res.ok) {
         const err = await res.json();
@@ -41,7 +48,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function listenForCompletion(taskId) {
-    const evtSource = new EventSource(`/ingest/stream/${taskId}`);
+    // Logic Fix: Use absolute path for EventSource
+    const evtSource = new EventSource(`${API_BASE}/ingest/stream/${taskId}`);
 
     evtSource.onmessage = (event) => {
       console.log("SSE Msg:", event.data);
@@ -61,22 +69,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     evtSource.onerror = (err) => {
       console.error("SSE Error:", err);
+      // evtSource.close(); // Optional: depend on if you want auto-retry
     };
   }
 
   function renderResult(data) {
     resultDiv.style.display = 'block';
     const taskId = data.task_id;
-    const baseUrl = window.location.origin;
 
+    // Result UI with Grid Download Section
     resultDiv.innerHTML = `
             <h3>Analysis Complete</h3>
             <p>Deception Score: <strong>${data.score || 'N/A'}/100</strong></p>
             
             <div class="download-section">
-                <a href="${baseUrl}/results/download/${taskId}/body" class="download-btn">📥 Body VTT</a>
-                <a href="${baseUrl}/results/download/${taskId}/face" class="download-btn">📥 Face VTT</a>
-                <a href="${baseUrl}/results/download/${taskId}/audio" class="download-btn">📥 Audio VTT</a>
+                <a href="${API_BASE}/results/download/${taskId}/body" class="download-btn">📥 Body VTT</a>
+                <a href="${API_BASE}/results/download/${taskId}/face" class="download-btn">📥 Face VTT</a>
+                <a href="${API_BASE}/results/download/${taskId}/audio" class="download-btn">📥 Audio VTT</a>
             </div>
 
             <a href="${data.report_url || '#'}" target="_blank" class="report-link">View Full PDF Report</a>
