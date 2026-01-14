@@ -66,8 +66,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderResult(data) {
     resultDiv.style.display = 'block';
-
-    // Create the download URLs for each worker result
     const taskId = data.task_id;
     const baseUrl = window.location.origin;
 
@@ -75,13 +73,12 @@ document.addEventListener('DOMContentLoaded', () => {
             <h3>Analysis Complete</h3>
             <p>Deception Score: <strong>${data.score || 'N/A'}/100</strong></p>
             
-            <div class="download-section" style="margin-top: 20px; display: flex; flex-direction: column; gap: 10px;">
-                <a href="${baseUrl}/results/download/${taskId}/body" class="download-btn">📥 Download Body VTT</a>
-                <a href="${baseUrl}/results/download/${taskId}/face" class="download-btn">📥 Download Face VTT</a>
-                <a href="${baseUrl}/results/download/${taskId}/audio" class="download-btn">📥 Download Audio VTT</a>
+            <div class="download-section">
+                <a href="${baseUrl}/results/download/${taskId}/body" class="download-btn">📥 Body VTT</a>
+                <a href="${baseUrl}/results/download/${taskId}/face" class="download-btn">📥 Face VTT</a>
+                <a href="${baseUrl}/results/download/${taskId}/audio" class="download-btn">📥 Audio VTT</a>
             </div>
 
-            <hr style="margin: 20px 0;">
             <a href="${data.report_url || '#'}" target="_blank" class="report-link">View Full PDF Report</a>
         `;
   }
