@@ -47,23 +47,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const evtSource = new EventSource(`${API_BASE}/ingest/stream/${taskId}`);
 
     evtSource.onmessage = (event) => {
-      console.log("SSE Msg:", event.data);
       const data = JSON.parse(event.data);
+      console.log("SSE Msg:", data);
 
-      // 1. Handle incremental worker updates
-      if (data.download_url || data.worker_type) {
+      if (data.download_url) {
         renderWorkerLink(data);
       }
 
-      // 2. Handle final completion
+      // Final signal logic
       if (data.status === 'completed' && !data.worker_type) {
         evtSource.close();
-        statusDiv.innerText = "Analysis Ready.";
+        statusDiv.innerText = "Analysis Ready."; // This stops the spinner
         renderResult(data);
-        uploadBtn.disabled = false;
-      } else if (data.status === 'failed') {
-        evtSource.close();
-        statusDiv.innerText = "Processing Failed.";
         uploadBtn.disabled = false;
       }
     };
