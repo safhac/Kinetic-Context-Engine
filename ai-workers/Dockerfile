@@ -4,7 +4,10 @@ FROM python:3.9-slim
 # Added ffmpeg, libsm6, libxext6 for Video Encoding
 RUN apt-get update && apt-get install -y \
     libgl1 \
+    libsndfile1 \
+    libasound2 \
     libglib2.0-0 \
+    libpulse0 \
     ffmpeg \
     libsm6 \
     libxext6 \
