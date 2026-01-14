@@ -1,47 +1,115 @@
-/* Container for the VTT links */
+/* Base Styles */
+body {
+  background: #111;
+  color: #eee;
+  font-family: sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  margin: 0;
+}
+
+.container {
+  background: #222;
+  padding: 2rem;
+  border-radius: 8px;
+  width: 400px;
+  text-align: center;
+  border: 1px solid #333;
+}
+
+/* UI Elements */
+select,
+input {
+  width: 100%;
+  padding: 10px;
+  margin: 10px 0;
+  background: #333;
+  border: 1px solid #444;
+  color: white;
+  box-sizing: border-box;
+}
+
+button {
+  background: #00d2ff;
+  border: none;
+  padding: 12px 20px;
+  color: #000;
+  font-weight: bold;
+  cursor: pointer;
+  margin-top: 10px;
+  width: 100%;
+  transition: background 0.2s;
+}
+
+button:hover {
+  background: #009ec2;
+}
+
+button:disabled {
+  background: #555;
+  cursor: not-allowed;
+}
+
+/* Animations */
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 3px solid #555;
+  border-top: 3px solid #00d2ff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 8px;
+}
+
+@keyframes spin {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Results & Download Section */
 .download-section {
   margin-top: 20px;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
 }
 
-/* Individual VTT Download Buttons */
 .download-btn {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
-  padding: 10px 15px;
-  background-color: #f8f9fa;
-  border: 1px solid #dee2e6;
-  border-radius: 6px;
-  color: #333;
+  padding: 8px;
+  background: #333;
+  border: 1px solid #444;
+  color: #00d2ff;
   text-decoration: none;
-  font-size: 0.9rem;
-  font-weight: 500;
-  transition: all 0.2s ease;
+  font-size: 0.8rem;
+  border-radius: 4px;
+  transition: background 0.2s;
 }
 
 .download-btn:hover {
-  background-color: #e9ecef;
-  border-color: #adb5bd;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  background: #444;
+  border-color: #00d2ff;
 }
 
-/* The primary PDF Report link */
 .report-link {
   display: block;
-  text-align: center;
+  margin-top: 20px;
   padding: 12px;
-  background-color: #007bff;
-  color: white;
-  border-radius: 6px;
+  background: transparent;
+  border: 1px solid #00d2ff;
+  color: #00d2ff;
   text-decoration: none;
   font-weight: bold;
-  margin-top: 15px;
+  border-radius: 4px;
 }
 
 .report-link:hover {
-  background-color: #0056b3;
+  background: rgba(0, 210, 255, 0.1);
 }
