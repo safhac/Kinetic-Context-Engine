@@ -1,7 +1,6 @@
 from body_worker.pose_signals import get_active_pose_signals
 import sys
 import os
-import math
 
 # Add project root to path so we can import 'shared'
 sys.path.append(os.getcwd())
@@ -36,7 +35,7 @@ class BToEAdapter:
             return []
 
         # 1. GET RAW GEOMETRY SIGNALS
-        # We pass None for objects/audio for now, can hook those up later
+        # We pass None for objects/audio for now
         raw_detected = get_active_pose_signals(landmarks)
 
         # 2. MAP TO BOOK CODES
