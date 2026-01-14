@@ -31,7 +31,7 @@ TOPIC_RESULTS = "interpreted_context"
 app.add_middleware(CORSMiddleware, allow_origins=[
                    "*"], allow_methods=["*"], allow_headers=["*"])
 app.mount("/static", StaticFiles(directory="static"), name="static")
-app.mount("/media", StaticFiles(directory="/app/media"), name="media")
+
 # SSE State
 active_connections: Dict[str, List[asyncio.Queue]] = {}
 
