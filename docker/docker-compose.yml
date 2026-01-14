@@ -151,9 +151,8 @@ services:
     container_name: kce-gateway
     ports: ["8000:8000"]
     volumes:
-      - ../temp_media:/app/media  # Write Access
+      - ../temp_media:/app/media  
       - ../api-gateway/src:/app/src
-      - ../temp_media/results:/app/media/results
     environment:
       INGESTION_SERVICE_URL: "http://ingestion-service:8000" # Direct link to Service 2
       KAFKA_BROKER: kafka:29092 # Only needed for SSE listening (Results)
