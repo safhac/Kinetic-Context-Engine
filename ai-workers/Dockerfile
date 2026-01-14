@@ -1,24 +1,22 @@
 FROM python:3.9-slim
 
-# Install system dependencies
-# Added ffmpeg, libsm6, libxext6 for Video Encoding
 RUN apt-get update && apt-get install -y \
-    libgl1 \
-    libsndfile1 \
-    libasound2 \
-    libglib2.0-0 \
-    libpulse0 \
     ffmpeg \
-    libsm6 \
-    libxext6 \
+    libsndfile1 \
+    libpulse0 \
+    libasound2 \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+WORKDIR /app/ai-workers/audio_worker
 
-COPY ./ai-workers/requirements.txt .
+COPY ai-workers/audio_worker/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY ./shared /app/shared
-COPY ./ai-workers /app/ai-workers
+COPY shared /app/shared
 
-CMD ["python", "ai-workers/body_worker/tasks.py"]
+COPY ai-workers/audio_worker/ .
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
+
+CMD ["python", "main.py"]
