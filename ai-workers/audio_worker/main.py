@@ -6,6 +6,7 @@ import parselmouth
 from kafka import KafkaConsumer, KafkaProducer
 from vtoe_adapter import VToEAdapter
 
+sys.path.append("/app")
 sys.path.append(os.getcwd())
 
 # --- CONFIG ---
