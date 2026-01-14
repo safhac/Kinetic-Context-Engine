@@ -54,10 +54,10 @@ def check_redness_spike(frame, cheek_landmarks, face_landmarks):
 
     for idx in cheek_landmarks:
         # Safety check: ensure landmark index exists
-        if idx >= len(face_landmarks.landmark):
+        if idx >= len(face_landmarks):
             continue
 
-        lm = face_landmarks.landmark[idx]
+        lm = face_landmarks[idx]
         px, py = int(lm.x * w), int(lm.y * h)
 
         if py < 5 or py > h-5 or px < 5 or px > w-5:
@@ -88,38 +88,38 @@ def check_redness_spike(frame, cheek_landmarks, face_landmarks):
 # --- Geometric Signal Implementations ---
 
 def detect_chin_thrust(face_landmarks):
-    return face_landmarks.landmark[152].z < (face_landmarks.landmark[1].z - 0.05)
+    return face_landmarks[152].z < (face_landmarks[1].z - 0.05)
 
 
 def detect_lip_compression(face_landmarks):
-    return abs(face_landmarks.landmark[13].y - face_landmarks.landmark[14].y) < 0.005
+    return abs(face_landmarks[13].y - face_landmarks[14].y) < 0.005
 
 
 def detect_head_tilt(face_landmarks):
-    return abs(face_landmarks.landmark[33].y - face_landmarks.landmark[263].y) > 0.05
+    return abs(face_landmarks[33].y - face_landmarks[263].y) > 0.05
 
 
 def detect_eyebrow_flash(face_landmarks):
-    return abs(face_landmarks.landmark[105].y - face_landmarks.landmark[33].y) > 0.05
+    return abs(face_landmarks[105].y - face_landmarks[33].y) > 0.05
 
 
 def detect_eyebrow_narrowing(face_landmarks):
-    lm = face_landmarks.landmark
+    lm = face_landmarks
     return abs(lm[55].x - lm[285].x) < 0.02
 
 
 def detect_head_downcast_face_only(face_landmarks):
-    mid_eye_y = (face_landmarks.landmark[33].y +
-                 face_landmarks.landmark[263].y) / 2
-    return (face_landmarks.landmark[1].y - mid_eye_y) > 0.15
+    mid_eye_y = (face_landmarks[33].y +
+                 face_landmarks[263].y) / 2
+    return (face_landmarks[1].y - mid_eye_y) > 0.15
 
 
 def detect_vertical_head_shake(face_landmarks):
-    return detect_oscillating_vertical_movement(face_landmarks.landmark[1])
+    return detect_oscillating_vertical_movement(face_landmarks[1])
 
 
 def measure_facial_compression(face_landmarks):
-    lm = face_landmarks.landmark
+    lm = face_landmarks
     scrunch_dist = _dist(lm[1], lm[13])
     face_height = _dist(lm[10], lm[152])
     if face_height == 0:
@@ -132,25 +132,25 @@ def detect_disgust(face_landmarks):
 
 
 def detect_teeth_sucking(face_landmarks):
-    lm = face_landmarks.landmark
+    lm = face_landmarks
     width = abs(lm[61].x - lm[291].x)
     return width > 0.08
 
 
 def detect_jaw_clenching(face_landmarks):
-    lm = face_landmarks.landmark
+    lm = face_landmarks
     dist = abs(lm[21].y - lm[172].y)
     return dist < 0.05
 
 
 def detect_nostril_dilation(face_landmarks):
-    lm = face_landmarks.landmark
+    lm = face_landmarks
     width = abs(lm[64].x - lm[294].x)
     return width > 0.04
 
 
 def detect_yawn(face_landmarks):
-    lm = face_landmarks.landmark
+    lm = face_landmarks
     gap = abs(lm[13].y - lm[14].y)
     return gap > 0.15
 
@@ -160,21 +160,21 @@ def detect_flushing(frame, face_landmarks):
 
 
 def detect_happiness_genuine(face_landmarks):
-    lm = face_landmarks.landmark
+    lm = face_landmarks
     lip_width = abs(lm[61].x - lm[291].x)
     eye_squint = abs(lm[159].y - lm[145].y)
     return lip_width > 0.07 and eye_squint < 0.01
 
 
 def detect_surprise_genuine(face_landmarks):
-    lm = face_landmarks.landmark
+    lm = face_landmarks
     eyebrow_dist = abs(lm[105].y - lm[33].y)
     jaw_gap = abs(lm[13].y - lm[14].y)
     return eyebrow_dist > 0.06 and jaw_gap > 0.08
 
 
 def detect_fear(face_landmarks):
-    lm = face_landmarks.landmark
+    lm = face_landmarks
     eye_sclera = abs(lm[159].y - lm[145].y)
     lip_stretch = abs(lm[61].x - lm[291].x)
     return eye_sclera > 0.05 and lip_stretch > 0.08
@@ -182,7 +182,7 @@ def detect_fear(face_landmarks):
 
 def detect_confirmation_glance(face_landmarks):
     # Simplified iris tracking logic
-    lm = face_landmarks.landmark
+    lm = face_landmarks
     # 468 is iris center
     if 468 >= len(lm):
         return False
@@ -201,7 +201,7 @@ def detect_confirmation_glance(face_landmarks):
 
 
 def detect_eye_squint(face_landmarks):
-    lm = face_landmarks.landmark
+    lm = face_landmarks
     left_open = abs(lm[159].y - lm[145].y)
     right_open = abs(lm[386].y - lm[374].y)
     face_height = abs(lm[10].y - lm[152].y)
@@ -214,35 +214,35 @@ def detect_eye_squint(face_landmarks):
 # --- Hand-to-Face Logic (Needs Pose) ---
 
 def detect_head_support(face_landmarks, pose_landmarks):
-    chin = face_landmarks.landmark[152]
+    chin = face_landmarks[152]
     left_hand = pose_landmarks.landmark[13]
     right_hand = pose_landmarks.landmark[14]
     return _dist(chin, left_hand) < 0.1 or _dist(chin, right_hand) < 0.1
 
 
 def detect_hushing(face_landmarks, pose_landmarks):
-    mouth = face_landmarks.landmark[13]
+    mouth = face_landmarks[13]
     l_hand = pose_landmarks.landmark[15]
     r_hand = pose_landmarks.landmark[16]
     return _dist(mouth, l_hand) < 0.1 or _dist(mouth, r_hand) < 0.1
 
 
 def detect_finger_to_nose(face_landmarks, pose_landmarks):
-    nose = face_landmarks.landmark[1]
+    nose = face_landmarks[1]
     l_index = pose_landmarks.landmark[19]
     r_index = pose_landmarks.landmark[20]
     return _dist(nose, l_index) < 0.05 or _dist(nose, r_index) < 0.05
 
 
 def detect_eyelid_rubbing(face_landmarks, pose_landmarks):
-    eye = face_landmarks.landmark[33]
+    eye = face_landmarks[33]
     l_hand = pose_landmarks.landmark[15]
     r_hand = pose_landmarks.landmark[16]
     return _dist(eye, l_hand) < 0.1 or _dist(eye, r_hand) < 0.1
 
 
 def detect_object_in_mouth(face_landmarks, pose_landmarks):
-    mouth = face_landmarks.landmark[13]
+    mouth = face_landmarks[13]
     l_hand = pose_landmarks.landmark[15]
     r_hand = pose_landmarks.landmark[16]
     return _dist(mouth, l_hand) < 0.05 or _dist(mouth, r_hand) < 0.05
