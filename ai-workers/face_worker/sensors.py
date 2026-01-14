@@ -17,43 +17,53 @@ class SensorInterface:
 
 class MediaPipeFaceSensor(SensorInterface):
     def __init__(self):
-        self.mp_face_mesh = mp.solutions.face_mesh
-        self.face_mesh = self.mp_face_mesh.FaceMesh(
-            # 1. FIX: Set to True to force processing frames independently (CPU-safe)
-            # 'False' treats it as a video stream and tries to open an OpenGL context for tracking.
-            static_image_mode=True,
+        # Using the New Task API (v2) to match Body Worker
+        BaseOptions = mp.tasks.BaseOptions
+        FaceLandmarker = mp.tasks.vision.FaceLandmarker
+        FaceLandmarkerOptions = mp.tasks.vision.FaceLandmarkerOptions
+        VisionRunningMode = mp.tasks.vision.RunningMode
 
-            max_num_faces=1,
-            refine_landmarks=True,
-            min_detection_confidence=0.5
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        model_path = os.path.join(current_dir, 'face_landmarker.task')
+
+        if not os.path.exists(model_path):
+            print(f"❌ CRITICAL: Face model not found at {model_path}")
+
+        options = FaceLandmarkerOptions(
+            base_options=BaseOptions(model_asset_path=model_path),
+            running_mode=VisionRunningMode.IMAGE,  # Prevents GL context crashes
+            output_face_blendshapes=True,
+            num_faces=1
         )
+        # This makes 'self.landmarker' available for main.py
+        self.landmarker = FaceLandmarker.create_from_options(options)
 
     def process_frame(self, frame: np.ndarray, timestamp: float) -> List[Dict[str, Any]]:
+        """
+        Legacy support for the process_frame interface.
+        Note: main.py now calls self.landmarker.detect() directly for VTT.
+        """
         results = []
-
-        # 1. Convert to RGB for MediaPipe
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
 
-        # In the legacy API, .process() is used for both static and video modes
-        processed = self.face_mesh.process(rgb_frame)
+        detection_result = self.landmarker.detect(mp_image)
 
-        if processed.multi_face_landmarks:
-            for face_landmarks in processed.multi_face_landmarks:
-
-                # 2. CALL SIGNAL DETECTION WITH FRAME
+        if detection_result.face_landmarks:
+            for landmarks in detection_result.face_landmarks:
+                # Map detection using your face_signals logic
                 active_signals = get_active_face_signals(
-                    face_landmarks=face_landmarks,
+                    face_landmarks=landmarks,
                     pose_landmarks=None,
                     frame=frame
                 )
 
-                # 3. Format Output
                 for signal_name in active_signals:
                     results.append({
                         "signal": signal_name,
                         "intensity": 1.0,
                         "timestamp": timestamp,
-                        "source": "mediapipe_face_mesh"
+                        "source": "mediapipe_face_task"
                     })
 
         return results
