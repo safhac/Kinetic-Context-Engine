@@ -1,4 +1,4 @@
-from audio_worker.verbal_signals import analyze_segment
+from verbal_signals import analyze_segment
 import sys
 import os
 import parselmouth
