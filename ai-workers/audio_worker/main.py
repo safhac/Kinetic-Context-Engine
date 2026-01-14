@@ -1,79 +1,107 @@
 import os
 import json
-import logging
-import librosa
+import sys
+import time
 from kafka import KafkaConsumer, KafkaProducer
-from audio_processor import AudioProcessor
+# Assuming you have a basic AudioSensor class. If not, we can mock it.
+from audio_worker.sensors import AudioSensor
 
-# Logging Setup
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger("audio-worker")
+sys.path.append(os.getcwd())
 
-# Configuration
-KAFKA_BROKER = os.environ.get("KAFKA_BROKER", "kafka:29092")
-SOURCE_TOPIC = os.environ.get("SOURCE_TOPIC", "audio-tasks")
-DEST_TOPIC = os.environ.get("DEST_TOPIC", "processed_signals")
+# --- CONFIG ---
+KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:29092")
+SOURCE_TOPIC = os.getenv("SOURCE_TOPIC", "audio-tasks")
+DEST_TOPIC = os.getenv("DEST_TOPIC", "processed_signals")
+RESULTS_DIR = "/app/media/results"
+
+AUDIO_MEANING = {
+    "shouting": "Aggressive / Urgent",
+    "whisper": "Secretive / Uncertain",
+    "laughter": "Positive / Mocking",
+    "silence": "Pause",
+    "neutral": "Baseline"
+}
+
+
+def ms_to_vtt_time(ms):
+    seconds = int(ms / 1000)
+    millis = int(ms % 1000)
+    minutes = int(seconds / 60)
+    hours = int(minutes / 60)
+    return f"{hours:02}:{minutes % 60:02}:{seconds % 60:02}.{millis:03}"
+
+
+def write_vtt(filename, captions):
+    with open(filename, 'w', encoding='utf-8') as f:
+        f.write("WEBVTT\n\n")
+        for cap in captions:
+            f.write(
+                f"{ms_to_vtt_time(cap['start'])} --> {ms_to_vtt_time(cap['end'])}\n")
+            f.write(f"{cap['text']}\n\n")
 
 
 def main():
-    logger.info("👂 Audio Worker Starting...")
-
-    # Initialize Processor (No buffer duration needed for full file processing)
-    processor = AudioProcessor()
+    print(f"🎤 Audio Analyst (Subtitle Mode) initializing...")
+    os.makedirs(RESULTS_DIR, exist_ok=True)
 
     consumer = KafkaConsumer(
         SOURCE_TOPIC,
         bootstrap_servers=KAFKA_BROKER,
         value_deserializer=lambda m: json.loads(m.decode('utf-8')),
-        group_id="kce-audio-worker",
-        session_timeout_ms=60000,
-        heartbeat_interval_ms=10000,
-        max_poll_interval_ms=900000
+        group_id="kce-audio-worker-vtt-v1",
+        session_timeout_ms=60000
     )
-
     producer = KafkaProducer(
         bootstrap_servers=KAFKA_BROKER,
         value_serializer=lambda v: json.dumps(v).encode('utf-8')
     )
 
-    logger.info(f"✅ Listening on {SOURCE_TOPIC}")
+    sensor = AudioSensor()  # Ensure this class exists in audio_worker/sensors.py
+    print(f"✅ Audio Analyst Listening...")
 
     for message in consumer:
         try:
-            task = message.value
-            logger.info(f"Processing Task: {task.get('task_id')}")
+            payload = message.value
+            task_id = payload.get("task_id")
+            file_path = payload.get("file_path")
 
-            # 1. Get File Path
-            file_path = task.get("file_path")
             if not file_path or not os.path.exists(file_path):
-                logger.error(f"File not found: {file_path}")
+                print(f"⚠️ File not found: {file_path}")
                 continue
 
-            # 2. Load Audio from Disk (Resample to 16k for Whisper)
-            logger.info(f"Loading audio from {file_path}...")
-            # librosa loads as float32 automatically
-            audio_array, _ = librosa.load(file_path, sr=16000)
+            print(f"🎤 Analyzing Audio: {task_id}")
 
-            # 3. Process the Full Audio
-            text, pitch = processor.process_array(audio_array)
+            # Audio processing is usually faster than real-time
+            # This function should return a list of segments: [{'start': 0, 'end': 1000, 'signal': 'neutral'}]
+            # You might need to adjust this depending on your existing AudioSensor implementation
+            analysis_segments = sensor.process_file(file_path)
 
-            if text:
-                logger.info(
-                    f"🗣️ Transcript: '{text[:50]}...' (Pitch: {pitch:.1f}Hz)")
+            captions = []
+            for seg in analysis_segments:
+                signal = seg.get('signal', 'neutral')
+                meaning = AUDIO_MEANING.get(signal, "Tone")
+                captions.append({
+                    "start": seg['start_ms'],
+                    "end": seg['end_ms'],
+                    "text": f"AUDIO: {signal.upper()} ({meaning})"
+                })
 
-                output = {
-                    "task_id": task.get("task_id"),
-                    "signal": "verbal_analysis",
-                    "text": text,
-                    "pitch": pitch,
-                    "source": "audio_analysis"
-                }
-                producer.send(DEST_TOPIC, output)
-                logger.info(f"⚡ Sent Result")
+            output_filename = f"{task_id}_audio.vtt"
+            output_path = os.path.join(RESULTS_DIR, output_filename)
+            write_vtt(output_path, captions)
+
+            print(f"✅ Audio VTT Saved: {output_path}")
+
+            producer.send(DEST_TOPIC, {
+                "task_id": task_id,
+                "timestamp": 0,  # Audio summary doesn't have a single timestamp
+                "artifact_url": f"/media/results/{output_filename}",
+                "artifact_type": "subtitle",
+                "status": "completed"
+            })
 
         except Exception as e:
-            logger.error(f"Error processing audio task: {e}")
+            print(f"❌ Error: {e}")
 
 
 if __name__ == "__main__":
