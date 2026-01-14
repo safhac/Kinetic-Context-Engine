@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     resultDiv.style.display = 'none';
     uploadBtn.disabled = true;
 
-    // 2. Perform Upload (Command)
+    // 2. Perform Upload
     const formData = new FormData();
     formData.append('file', file);
     formData.append('context', context);
@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await res.json();
       const taskId = data.task_id;
 
-      // 3. Start SSE Listener (Query)
+      // 3. Start SSE Listener
       statusDiv.innerHTML = `<div class="spinner"></div> Processing (ID: ${taskId.substr(0, 8)})...`;
       listenForCompletion(taskId);
 
@@ -48,36 +48,41 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = JSON.parse(event.data);
 
       if (data.status === 'completed') {
-        // SUCCESS
         evtSource.close();
         statusDiv.innerText = "Analysis Ready.";
         renderResult(data);
         uploadBtn.disabled = false;
       } else if (data.status === 'failed') {
-        // FAILURE
         evtSource.close();
         statusDiv.innerText = "Processing Failed.";
         uploadBtn.disabled = false;
       }
     };
 
-    evtSource.addEventListener("close", () => {
-      evtSource.close();
-    });
-
     evtSource.onerror = (err) => {
       console.error("SSE Error:", err);
-      // Don't close immediately on error, browser retries. 
-      // But if it persists, you might want to timeout.
     };
   }
 
   function renderResult(data) {
     resultDiv.style.display = 'block';
+
+    // Create the download URLs for each worker result
+    const taskId = data.task_id;
+    const baseUrl = window.location.origin;
+
     resultDiv.innerHTML = `
             <h3>Analysis Complete</h3>
-            <p>Deception Score: <strong>${data.score}/100</strong></p>
-            <a href="${data.report_url}" target="_blank" class="download-btn">Download PDF Report</a>
+            <p>Deception Score: <strong>${data.score || 'N/A'}/100</strong></p>
+            
+            <div class="download-section" style="margin-top: 20px; display: flex; flex-direction: column; gap: 10px;">
+                <a href="${baseUrl}/results/download/${taskId}/body" class="download-btn">📥 Download Body VTT</a>
+                <a href="${baseUrl}/results/download/${taskId}/face" class="download-btn">📥 Download Face VTT</a>
+                <a href="${baseUrl}/results/download/${taskId}/audio" class="download-btn">📥 Download Audio VTT</a>
+            </div>
+
+            <hr style="margin: 20px 0;">
+            <a href="${data.report_url || '#'}" target="_blank" class="report-link">View Full PDF Report</a>
         `;
   }
 });
