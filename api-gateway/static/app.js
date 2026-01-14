@@ -4,7 +4,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const statusDiv = document.getElementById('status');
   const resultDiv = document.getElementById('result');
 
-  // Hardcoded API Base to avoid NGINX/Port confusion
   const API_BASE = "http://localhost:8000";
 
   uploadBtn.addEventListener('click', async () => {
@@ -12,18 +11,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const context = document.getElementById('contextSelect').value;
     if (!file) return alert("Select a file first.");
 
-    // 1. UI Reset
     statusDiv.innerHTML = '<div class="spinner"></div> Uploading to Backbone...';
+    resultDiv.innerHTML = ''; // Clear previous results
     resultDiv.style.display = 'none';
     uploadBtn.disabled = true;
 
-    // 2. Perform Upload
     const formData = new FormData();
     formData.append('file', file);
     formData.append('context', context);
 
     try {
-      // Logic Fix: Use absolute path to bypass NGINX routing
       const res = await fetch(`${API_BASE}/ingest/upload`, {
         method: 'POST',
         body: formData
@@ -37,7 +34,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await res.json();
       const taskId = data.task_id;
 
-      // 3. Start SSE Listener
       statusDiv.innerHTML = `<div class="spinner"></div> Processing (ID: ${taskId.substr(0, 8)})...`;
       listenForCompletion(taskId);
 
@@ -48,14 +44,19 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function listenForCompletion(taskId) {
-    // Logic Fix: Use absolute path for EventSource
     const evtSource = new EventSource(`${API_BASE}/ingest/stream/${taskId}`);
 
     evtSource.onmessage = (event) => {
       console.log("SSE Msg:", event.data);
       const data = JSON.parse(event.data);
 
-      if (data.status === 'completed') {
+      // 1. Handle incremental worker updates
+      if (data.download_url || data.worker_type) {
+        renderWorkerLink(data);
+      }
+
+      // 2. Handle final completion
+      if (data.status === 'completed' && !data.worker_type) {
         evtSource.close();
         statusDiv.innerText = "Analysis Ready.";
         renderResult(data);
@@ -69,26 +70,58 @@ document.addEventListener('DOMContentLoaded', () => {
 
     evtSource.onerror = (err) => {
       console.error("SSE Error:", err);
-      // evtSource.close(); // Optional: depend on if you want auto-retry
     };
+  }
+
+  function renderWorkerLink(data) {
+    if (!data.download_url) return;
+    resultDiv.style.display = 'block';
+
+    // Ensure container exists
+    let container = document.getElementById('vtt-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'vtt-container';
+      container.className = 'download-section';
+      resultDiv.appendChild(container);
+    }
+
+    // Prevent duplicates
+    const workerId = `link-${data.worker_type}`;
+    if (document.getElementById(workerId)) return;
+
+    const link = document.createElement('a');
+    link.id = workerId;
+    link.href = `${API_BASE}${data.download_url}`;
+    link.className = "download-btn";
+    link.innerText = `📥 ${data.worker_type.toUpperCase()} VTT`;
+
+    container.appendChild(link);
   }
 
   function renderResult(data) {
     resultDiv.style.display = 'block';
-    const taskId = data.task_id;
 
-    // Result UI with Grid Download Section
-    resultDiv.innerHTML = `
-            <h3>Analysis Complete</h3>
-            <p>Deception Score: <strong>${data.score || 'N/A'}/100</strong></p>
-            
-            <div class="download-section">
-                <a href="${API_BASE}/results/download/${taskId}/body" class="download-btn">📥 Body VTT</a>
-                <a href="${API_BASE}/results/download/${taskId}/face" class="download-btn">📥 Face VTT</a>
-                <a href="${API_BASE}/results/download/${taskId}/audio" class="download-btn">📥 Audio VTT</a>
-            </div>
+    let scoreInfo = document.getElementById('score-info');
+    if (!scoreInfo) {
+      scoreInfo = document.createElement('div');
+      scoreInfo.id = 'score-info';
+      resultDiv.prepend(scoreInfo);
+    }
 
-            <a href="${data.report_url || '#'}" target="_blank" class="report-link">View Full PDF Report</a>
-        `;
+    scoreInfo.innerHTML = `
+        <h3>Analysis Complete</h3>
+        <p>Deception Score: <strong>${data.deception_score || 'N/A'}/100</strong></p>
+        <hr>
+    `;
+
+    if (!document.getElementById('pdf-report') && data.report_url) {
+      const reportLink = document.createElement('a');
+      reportLink.id = 'pdf-report';
+      reportLink.href = data.report_url;
+      reportLink.className = 'report-link';
+      reportLink.innerText = 'View Full PDF Report';
+      resultDiv.appendChild(reportLink);
+    }
   }
 });
