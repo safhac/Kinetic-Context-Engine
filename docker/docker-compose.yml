@@ -143,6 +143,23 @@ services:
       KAFKA_TOPIC_BODY: body-tasks
       KAFKA_TOPIC_AUDIO: audio-tasks
 
+  
+  orchestrator:
+    build:
+      context: .
+      dockerfile: ai-workers/orchestrator/Dockerfile
+    container_name: kce-orchestrator
+    environment:
+      - KAFKA_BROKER=kafka:29092
+      - RESULTS_DIR=/app/media/results
+    volumes:
+      - ./media:/app/media
+      - ./ai-workers/orchestrator/src:/app/src
+    depends_on:
+      - kafka
+    networks:
+      - kce-network
+  
   # --- SERVICE 1: API GATEWAY (Public Facing) ---
   api-gateway:
     build: 
