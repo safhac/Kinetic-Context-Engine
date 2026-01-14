@@ -2,8 +2,10 @@ import os
 import json
 import cv2
 import sys
+import mediapipe as mp
 from kafka import KafkaConsumer, KafkaProducer
 from face_worker.sensors import MediaPipeFaceSensor
+from face_worker.ftoe_adapter import FToEAdapter
 
 sys.path.append(os.getcwd())
 
@@ -12,14 +14,6 @@ KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:29092")
 SOURCE_TOPIC = os.getenv("SOURCE_TOPIC", "face-tasks")
 DEST_TOPIC = os.getenv("DEST_TOPIC", "processed_signals")
 RESULTS_DIR = "/app/media/results"
-
-# --- MEANING MAP ---
-FACE_MEANING = {
-    "smile": "Positive / Agreement",
-    "frown": "Negative / Disagreement",
-    "surprise": "Shock / Unexpected",
-    "neutral": "Baseline"
-}
 
 
 def ms_to_vtt_time(ms):
@@ -47,7 +41,7 @@ def main():
         SOURCE_TOPIC,
         bootstrap_servers=KAFKA_BROKER,
         value_deserializer=lambda m: json.loads(m.decode('utf-8')),
-        group_id="kce-face-worker-vtt-v1",
+        group_id="kce-face-worker-vtt-v2",
         session_timeout_ms=60000
     )
     producer = KafkaProducer(
@@ -56,6 +50,7 @@ def main():
     )
 
     sensor = MediaPipeFaceSensor()
+    ftoe = FToEAdapter()
     print(f"✅ Face Analyst Listening...")
 
     for message in consumer:
@@ -84,29 +79,36 @@ def main():
 
                 timestamp_ms = cap.get(cv2.CAP_PROP_POS_MSEC)
 
-                # Process Frame
-                signals_list = sensor.process_frame(frame, timestamp_ms)
+                # 1. Detect
+                # Note: sensors.py likely returns simplied list, but we want raw landmarks
+                # We will trigger the sensor primarily to get the landmarks for the Adapter
+                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                mp_image = mp.Image(
+                    image_format=mp.ImageFormat.SRGB, data=rgb_frame)
+                detection_result = sensor.landmarker.detect(mp_image)
 
-                # Robust extraction
-                active_gesture = None
-                if signals_list:
-                    raw = signals_list[0]
-                    active_gesture = raw.get('signal') if isinstance(
-                        raw, dict) else str(raw)
+                # 2. Analyze with FToE Adapter
+                current_codes = []
+                if detection_result.face_landmarks:
+                    # FaceMesh usually returns list of faces, take first
+                    raw_landmarks = detection_result.face_landmarks[0]
+                    # Pass frame for redness detection
+                    current_codes = ftoe.analyze_frame(
+                        raw_landmarks, frame=frame)
 
-                # Aggregation Logic
-                if active_gesture != current_signal:
+                # 3. VTT Logic
+                active_code = current_codes[0] if current_codes else None
+
+                if active_code != current_signal:
                     if current_signal:
-                        meaning = FACE_MEANING.get(
-                            current_signal, "Expression")
                         captions.append({
                             "start": start_time,
                             "end": timestamp_ms,
-                            "text": f"FACE: {current_signal.upper()} ({meaning})"
+                            "text": f"FACE: {current_signal}"
                         })
 
-                    if active_gesture:
-                        current_signal = active_gesture
+                    if active_code:
+                        current_signal = active_code
                         start_time = timestamp_ms
                     else:
                         current_signal = None
@@ -115,12 +117,11 @@ def main():
                 if frame_count % 300 == 0:
                     print(f"   ...analyzed {frame_count} frames")
 
-            # Close final caption
             if current_signal:
                 captions.append({
                     "start": start_time,
                     "end": cap.get(cv2.CAP_PROP_POS_MSEC),
-                    "text": f"FACE: {current_signal.upper()}"
+                    "text": f"FACE: {current_signal}"
                 })
 
             cap.release()
