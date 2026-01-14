@@ -100,10 +100,14 @@ def main():
             # --- PREPARE OUTPUT ---
 
             # Check if the worker sent us a finished video link
-            download_link = payload.get("artifact_url")
+            download_link = payload.get(
+                "download_url") or payload.get("artifact_url")
+
+            worker_type = payload.get("worker_type", "general")
 
             output_payload = {
                 "task_id": task_id,
+                "worker_type": worker_type,
                 "timestamp": payload.get("timestamp"),
                 "deception_score": round(brain.score, 2),
                 "triggers": triggered_updates,
