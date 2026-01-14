@@ -146,15 +146,16 @@ services:
   
   orchestrator:
     build:
-      context: .
+      context: ..  # Look at KCE-Project root
       dockerfile: ai-workers/orchestrator/Dockerfile
     container_name: kce-orchestrator
     environment:
       - KAFKA_BROKER=kafka:29092
       - RESULTS_DIR=/app/media/results
+      - PYTHONPATH=/app  # Critical for 'import shared' to work
     volumes:
       - ../temp_media:/app/media
-      - ./ai-workers/orchestrator/src:/app/src
+      - ../ai-workers/orchestrator/src:/app/src
     depends_on:
       - kafka
     networks:
