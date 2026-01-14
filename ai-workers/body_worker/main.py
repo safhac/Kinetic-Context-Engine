@@ -136,7 +136,13 @@ def main():
 
                 # 3. Draw HUD (Text Overlay)
                 if signals:
-                    text = f"Detected: {', '.join(signals)}"
+                    # FIX: Extract the signal name from the dict.
+                    # We assume the key is 'signal', but fallback to str(s) if missing.
+                    signal_names = [s.get('signal', str(s)) if isinstance(
+                        s, dict) else str(s) for s in signals]
+
+                    text = f"Detected: {', '.join(signal_names)}"
+
                     # Draw text with a black outline for visibility
                     cv2.putText(annotated_frame, text, (10, 50),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 4, cv2.LINE_AA)
