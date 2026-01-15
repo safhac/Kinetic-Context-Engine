@@ -38,22 +38,23 @@ services:
 
   ingestion-service:
     build:
-      context: ../app/ingestion-service
-      dockerfile: Dockerfile
-    ports: ["8001:8001"]
+      context: ..  # Project Root
+      dockerfile: ingestion-service/Dockerfile
+    container_name: kce-ingestion
+    ports: 
+      - "8001:8001"
     volumes:
-      - ../temp_media:/app/media  # Shared Video Storage
-      - ../app/ingestion-service/src:/app/src  # <--- ADD THIS LINE
-    depends_on:
-      kafka:
-        condition: service_healthy
-      redis:
-        condition: service_started
+      - ../temp_media:/app/media     # Write access for uploads
+      # Map the source code for live dev changes
+      - ../ingestion-service/src:/app/src 
     environment:
-      KAFKA_BROKER: kafka:29092
-      KAFKA_TOPIC_FACE: face-tasks
-      KAFKA_TOPIC_BODY: body-tasks
-      KAFKA_TOPIC_AUDIO: audio-tasks
+      - KAFKA_BROKER=kafka:29092
+      - REDIS_HOST=redis
+    depends_on:
+      - kafka
+      - redis
+    networks:
+      - kce-network
 
 
   # --- INFRASTRUCTURE ---
