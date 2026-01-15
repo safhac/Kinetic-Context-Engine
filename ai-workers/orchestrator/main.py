@@ -2,14 +2,14 @@ import os
 import json
 import logging
 from kafka import KafkaConsumer
-# Corrected imports for unified path
 from shared.schemas import GestureSignal, VideoProfile
+# We point to the specific logic file we are keeping
 from app.context_engine.src.deception_model import DeceptionModel
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("kce-brain")
 
-KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:29092")
+# Shared paths in Docker
 RESULTS_DIR = "/app/media/results"
 
 
@@ -18,14 +18,15 @@ def main():
 
     consumer = KafkaConsumer(
         "raw_signals", "video_profiles",
-        bootstrap_servers=KAFKA_BROKER,
+        bootstrap_servers=os.getenv("KAFKA_BROKER", "kafka:29092"),
         value_deserializer=lambda m: json.loads(m.decode('utf-8')),
         group_id="kce-brain-v1"
     )
 
     profiles = {}
     signals = {}
-    engine = DeceptionModel()  # The Context Engine logic
+    # This replaces the entire context-engine microservice
+    engine = DeceptionModel()
 
     for msg in consumer:
         data = msg.value
@@ -40,11 +41,11 @@ def main():
         elif msg.topic == "raw_signals":
             sig = GestureSignal(**data)
 
-            # --- NEW: Process Scoring ---
+            # --- Scoring Logic (The "Deception Model" part) ---
             score = engine.analyze(sig)
             logger.info(f"🔍 Task {task_id} | Score: {score}")
 
-            # --- Existing: VTT Update ---
+            # --- VTT Logic (The "Orchestrator" part) ---
             if task_id not in signals:
                 signals[task_id] = []
             signals[task_id].append(sig)
