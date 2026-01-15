@@ -1,4 +1,5 @@
 import os
+import asyncio
 import json
 import logging
 import uuid
@@ -7,6 +8,7 @@ import redis
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from aiokafka import AIOKafkaProducer
+from aiokafka.errors import KafkaConnectionError
 from .schemas import VideoProfile  # Ensure this exists in your schemas.py
 
 logging.basicConfig(level=logging.INFO)
