@@ -3,14 +3,13 @@ import json
 import logging
 import time
 from kafka import KafkaConsumer
-from kafka.errors import NoBrokersAvailable
+from kafka.errors import NoBrokersAvailable  # <--- Added
 from shared.schemas import GestureSignal, VideoProfile
 from deception_model import DeceptionModel
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("kce-brain")
 
-# Shared paths in Docker
 RESULTS_DIR = os.getenv("RESULTS_DIR", "/app/media/results")
 KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:29092")
 
@@ -18,7 +17,7 @@ KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:29092")
 def main():
     logger.info("🧠 KCE-Brain (Unified Orchestrator + Context) starting...")
 
-    # --- RETRY LOGIC (Added) ---
+    # --- RETRY LOGIC ---
     consumer = None
     while consumer is None:
         try:
@@ -32,7 +31,7 @@ def main():
         except NoBrokersAvailable:
             logger.warning("⏳ Kafka not ready. Retrying in 5s...")
             time.sleep(5)
-    # ---------------------------
+    # -------------------
 
     profiles = {}
     signals = {}
@@ -50,20 +49,16 @@ def main():
 
         elif msg.topic == "raw_signals":
             sig = GestureSignal(**data)
-
-            # 1. Update the Truthfulness Score
             score = engine.analyze(sig)
 
-            # 2. Update the VTT file (The "Trinity" result)
             if task_id not in signals:
                 signals[task_id] = []
             signals[task_id].append(sig)
 
             if task_id in profiles:
                 write_final_vtt(task_id, profiles[task_id], signals[task_id])
-                # Log the combined state
                 logger.info(
-                    f"📝 Task {task_id} | Signal: {sig.worker_type} | Global Score: {score}%")
+                    f"📝 Task {task_id} | Signal: {sig.worker_type} | Score: {score}%")
 
 
 def write_final_vtt(task_id, profile, gesture_list):
