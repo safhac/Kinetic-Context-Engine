@@ -1,30 +1,42 @@
 import os
 import json
 import logging
+import time
 from kafka import KafkaConsumer
+from kafka.errors import NoBrokersAvailable
 from shared.schemas import GestureSignal, VideoProfile
-from deception_model import DeceptionModel  # Now a local import
+from deception_model import DeceptionModel
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("kce-brain")
 
 # Shared paths in Docker
 RESULTS_DIR = os.getenv("RESULTS_DIR", "/app/media/results")
+KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:29092")
 
 
 def main():
     logger.info("🧠 KCE-Brain (Unified Orchestrator + Context) starting...")
 
-    consumer = KafkaConsumer(
-        "raw_signals", "video_profiles",
-        bootstrap_servers=os.getenv("KAFKA_BROKER", "kafka:29092"),
-        value_deserializer=lambda m: json.loads(m.decode('utf-8')),
-        group_id="kce-brain-v1"
-    )
+    # --- RETRY LOGIC (Added) ---
+    consumer = None
+    while consumer is None:
+        try:
+            consumer = KafkaConsumer(
+                "raw_signals", "video_profiles",
+                bootstrap_servers=KAFKA_BROKER,
+                value_deserializer=lambda m: json.loads(m.decode('utf-8')),
+                group_id="kce-brain-v1"
+            )
+            logger.info("✅ Brain connected to Kafka.")
+        except NoBrokersAvailable:
+            logger.warning("⏳ Kafka not ready. Retrying in 5s...")
+            time.sleep(5)
+    # ---------------------------
 
     profiles = {}
     signals = {}
-    engine = DeceptionModel()  # Initialized from local deception_model.py
+    engine = DeceptionModel()
 
     for msg in consumer:
         data = msg.value
