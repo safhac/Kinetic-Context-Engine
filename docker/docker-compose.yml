@@ -95,24 +95,6 @@ services:
     environment:
       TZ: Asia/Jerusalem
 
-  # --- CONSUMERS ---
-  # 1. Telemetry Consumer (Kafka)
-  context-engine:
-    build:
-      context: ../app/context-engine
-      dockerfile: Dockerfile
-    depends_on:
-      kafka:
-        condition: service_healthy
-    environment:
-      TZ: Asia/Jerusalem
-      KAFKA_BROKER: kafka:29092
-      SOURCE_TOPIC: processed_signals
-      CONSUMER_GROUP: kce-context-group
-    restart: always
-    volumes:
-      - ../temp_media:/app/media
-
   # 2. Face Worker (Sensation Layer - Kafka Consumer)
   ai-worker-face:
       build:
