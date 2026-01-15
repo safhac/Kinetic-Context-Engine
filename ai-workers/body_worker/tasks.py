@@ -12,6 +12,7 @@ mp_pose = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
 
+
 def create_video_writer(output_path, fps, width, height):
     """
     Tries multiple codecs to find one that works (H.264 -> MPEG-4).
@@ -27,6 +28,7 @@ def create_video_writer(output_path, fps, width, height):
         except Exception as e:
             logger.warning(f"Codec {codec} init failed: {e}")
     return None
+
 
 def detect_and_draw_gesture(landmarks, width, height, frame):
     """
@@ -44,16 +46,17 @@ def detect_and_draw_gesture(landmarks, width, height, frame):
     rw_pos = (int(r_wrist.x * width), int(r_wrist.y * height))
     threshold_y = int(l_elbow.y * height)
 
-    cv2.circle(frame, lw_pos, 15, (0, 255, 255), -1) 
+    cv2.circle(frame, lw_pos, 15, (0, 255, 255), -1)
     cv2.circle(frame, rw_pos, 15, (0, 255, 255), -1)
-    cv2.line(frame, (0, threshold_y), (width, threshold_y), (0, 0, 255), 2) 
+    cv2.line(frame, (0, threshold_y), (width, threshold_y), (0, 0, 255), 2)
 
     return gesture
+
 
 @shared_task(name='process_body_video', bind=True)
 def process_body_video(self, file_path, task_id):
     logger.info(f"[Body-Worker] Processing: {file_path}")
-    
+
     # 1. Validation & Setup
     if not os.path.exists(file_path):
         return {"status": "failed", "error": "File missing"}
@@ -69,7 +72,7 @@ def process_body_video(self, file_path, task_id):
     output_dir = "/app/media/results"
     os.makedirs(output_dir, exist_ok=True)
     output_video_path = os.path.join(output_dir, f"{task_id}_labeled.mp4")
-    
+
     out = create_video_writer(output_video_path, fps, width, height)
     if not out:
         cap.release()
@@ -79,8 +82,8 @@ def process_body_video(self, file_path, task_id):
     # Scales font size based on video width (e.g., 4K video gets larger text)
     font_scale = (width / 1000.0) * 1.5
     thickness = int((width / 1000.0) * 3) + 1
-    x_pos = int(width * 0.05) # 5% padding from left
-    y_pos = int(height * 0.1) # 10% padding from top
+    x_pos = int(width * 0.05)  # 5% padding from left
+    y_pos = int(height * 0.1)  # 10% padding from top
 
     frame_count = 0
     results_data = []
@@ -90,16 +93,17 @@ def process_body_video(self, file_path, task_id):
         with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
             while cap.isOpened():
                 ret, frame = cap.read()
-                if not ret: break
-                
+                if not ret:
+                    break
+
                 frame_count += 1
-                
+
                 # Prepare MediaPipe Input
                 frame.flags.writeable = False
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 results = pose.process(rgb_frame)
                 frame.flags.writeable = True
-                
+
                 current_gesture = "UNKNOWN"
 
                 if results.pose_landmarks:
@@ -109,15 +113,18 @@ def process_body_video(self, file_path, task_id):
                         landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style()
                     )
                     # Detect Gesture
-                    current_gesture = detect_and_draw_gesture(results.pose_landmarks.landmark, width, height, frame)
+                    current_gesture = detect_and_draw_gesture(
+                        results.pose_landmarks.landmark, width, height, frame)
 
                 # Draw Status Text (Updates every frame)
-                color = (0, 255, 0) if current_gesture == "HANDS_RAISED" else (0, 0, 255)
-                cv2.putText(frame, f"Mode: {current_gesture}", (x_pos, y_pos), 
+                color = (0, 255, 0) if current_gesture == "HANDS_RAISED" else (
+                    0, 0, 255)
+                cv2.putText(frame, f"Mode: {current_gesture}", (x_pos, y_pos),
                             cv2.FONT_HERSHEY_SIMPLEX, font_scale, color, thickness, cv2.LINE_AA)
 
                 out.write(frame)
-                results_data.append({"frame": frame_count, "gesture": current_gesture})
+                results_data.append(
+                    {"frame": frame_count, "gesture": current_gesture})
 
     except Exception as e:
         logger.error(f"Processing crashed: {e}")
