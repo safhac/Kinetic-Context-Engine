@@ -39,9 +39,20 @@ async def startup():
     # Create Upload Dir if missing
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     # Start Kafka
-    producer = AIOKafkaProducer(bootstrap_servers=KAFKA_BROKER)
-    await producer.start()
-    logger.info("✅ Unified Ingestor Ready")
+    # Retry Loop for Kafka
+    max_retries = 10
+    for i in range(max_retries):
+        try:
+            logger.info(f"Connecting to Kafka ({i+1}/{max_retries})...")
+            producer = AIOKafkaProducer(bootstrap_servers=KAFKA_BROKER)
+            await producer.start()
+            logger.info("✅ Unified Ingestor Connected to Kafka")
+            return
+        except (KafkaConnectionError, OSError) as e:
+            logger.warning(f"Kafka not ready yet: {e}")
+            await asyncio.sleep(5)
+
+    raise Exception("Could not connect to Kafka after retries")
 
 
 @app.on_event("shutdown")
