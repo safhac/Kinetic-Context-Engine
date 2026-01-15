@@ -5,8 +5,7 @@ from shared.schemas import GestureSignal
 
 class DeceptionModel:
     def __init__(self):
-        # --- YOUR ORIGINAL WEIGHTS (PRESERVED) ---
-        # 0.0 = Neutral, 1.0 = High Stress/Deception Indicator
+        # Weights: How much does each signal contribute to the Deception Score?
         self.signal_weights = {
             # --- FACE (Visual) ---
             "chin_thrust": 0.6,
@@ -37,30 +36,19 @@ class DeceptionModel:
             "over_apologizing": 0.5
         }
 
-        # Internal Score State
         self.score = 0.0
         self.decay_rate = 0.05
 
     def analyze(self, signal: GestureSignal) -> float:
-        """
-        THE BRIDGE: Connects the new Orchestrator to your original logic.
-        """
-        # 1. Decay the score slightly with every new event (cooling off)
+        """The Bridge: Adapts the new Orchestrator call to your original logic."""
         self.decay()
-
-        # 2. Normalize the input text to match your dictionary keys
-        # e.g., "Chin Thrust" -> "chin_thrust"
         key = signal.text.lower().replace(" ", "_")
-
-        # 3. Call your original update logic using the AI's confidence
         new_score = self.update_score(key, intensity=signal.confidence)
-
         return new_score
 
     def update_score(self, signal_name, intensity=1.0):
-        # 1. Get Weight (Try exact match, then substring match)
+        # 1. Get Weight
         weight = self.signal_weights.get(signal_name, 0.1)
-
         if weight == 0.1:
             for w_key, w_val in self.signal_weights.items():
                 if w_key in signal_name:
@@ -71,12 +59,38 @@ class DeceptionModel:
         self.score += (weight * intensity)
 
         # 3. Cap the score (0 to 100 for the UI percentage)
-        # Your original was 0-10, but the UI expects %, so we scale up x10
         self.score = max(0.0, min(self.score * 10, 100.0))
-
         return self.score
 
     def decay(self):
-        """Lowers score over time."""
         self.score = max(0.0, self.score - self.decay_rate)
         return self.score
+
+    def get_meaning(self, raw_text):
+        """Translates raw detection labels into psychological context."""
+        mapping = {
+            # Face
+            "lips_compressed": "🤐 Holding Back Speech",
+            "chin_thrust": "💪 Challenge / Anger",
+            "eye_squint": "🤔 Disbelief / Evaluation",
+            "eyebrow_flash": "👋 Recognition / Surprise",
+            "flushing": "😳 High Stress / Embarrassment",
+
+            # Body
+            "arms_crossed": "🛡️ Defensive / Self-Comfort",
+            "hand_on_face": "🧠 Cognitive Load / Hiding",
+            "shoulder_shrug": "🤷 Doubt / Indifference",
+            "security_check": "😟 Anxiety (Checking Pockets)",
+            "leaning_away": "🚫 Disengagement",
+
+            # Audio
+            "pitch_rise": "📈 Stress / Emotion",
+            "hesitation": "⏳ Searching for words",
+        }
+
+        key = raw_text.lower().replace(" ", "_")
+        for m_key, m_val in mapping.items():
+            if m_key in key:
+                return m_val
+
+        return raw_text.title()
