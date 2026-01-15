@@ -4,7 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const statusDiv = document.getElementById('status');
   const resultDiv = document.getElementById('result');
 
-  // 1. Point to Nginx (Relative Path)
+  // 1. Point relative to Nginx (No localhost:8000)
   const API_BASE = "/api";
   const MEDIA_BASE = "/media/results";
 
@@ -13,7 +13,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const context = document.getElementById('contextSelect').value;
     if (!file) return alert("Select a file first.");
 
-    // UI Reset
     statusDiv.innerHTML = '<div class="spinner"></div> Uploading to KCE Brain...';
     resultDiv.innerHTML = '';
     resultDiv.style.display = 'none';
@@ -25,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     try {
       // 2. Upload to Ingestor via Nginx
+      // Nginx /api/ingest/upload -> Ingestor /ingest/upload
       const res = await fetch(`${API_BASE}/ingest/upload`, {
         method: 'POST',
         body: formData
@@ -62,7 +62,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const res = await fetch(vttUrl, { method: 'HEAD' });
 
         if (res.ok) {
-          // 4. Success! File exists.
           clearInterval(interval);
           displaySuccess(taskId, vttUrl);
         } else if (attempts >= maxAttempts) {
