@@ -67,7 +67,6 @@ def main():
                     continue
 
                 timestamp_sec = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
-                frame_count += 1
 
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 mp_image = mp.Image(
