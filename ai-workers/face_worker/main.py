@@ -62,9 +62,9 @@ def main():
                     break
 
                 # Skip frames to save CPU/RAM
-                if frame_count % frame_skip != 0:
-                    frame_count += 1
-                    continue
+                # if frame_count % frame_skip != 0:
+                #     frame_count += 1
+                #     continue
 
                 timestamp_sec = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
 
