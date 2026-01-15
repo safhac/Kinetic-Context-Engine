@@ -8,7 +8,7 @@ RUN pip install --no-cache-dir kafka-python pydantic
 
 # Copy shared first
 COPY shared /app/shared
-
+COPY app/context-engine /app/app/context-engine
 # If your file is at ai-workers/orchestrator/main.py, copy it like this:
 COPY ai-workers/orchestrator /app/orchestrator
 
