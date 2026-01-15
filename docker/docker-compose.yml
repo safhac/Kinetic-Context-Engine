@@ -86,8 +86,10 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    networks:
+      - kce-network
 
-
+      
   redis:
     image: redis:alpine
     container_name: kce-redis
