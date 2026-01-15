@@ -53,13 +53,21 @@ def main():
             last_signal = None
             last_seen_time = 0
             GRACE_PERIOD = 0.5
+            frame_count = 0
+            frame_skip = 5
 
             while cap.isOpened():
                 ret, frame = cap.read()
                 if not ret:
                     break
 
+                # Skip frames to save CPU/RAM
+                if frame_count % frame_skip != 0:
+                    frame_count += 1
+                    continue
+
                 timestamp_sec = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
+                frame_count += 1
 
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 mp_image = mp.Image(
