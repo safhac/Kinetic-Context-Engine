@@ -10,8 +10,8 @@ services:
       - "8080:8080"
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ../api-gateway/static:/usr/share/nginx/html:ro  
-      - ../temp_media:/usr/share/nginx/media:ro  
+      - ../ui:/usr/share/nginx/html:ro  
+      - ../temp_media:/usr/share/nginx/media:ro
     depends_on:
       - ingestion-service
     networks:
