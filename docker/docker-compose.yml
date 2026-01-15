@@ -95,6 +95,8 @@ services:
       - "6379:6379"
     environment:
       TZ: Asia/Jerusalem
+    networks:      
+      - kce-network
 
   # 2. Face Worker (Sensation Layer - Kafka Consumer)
   ai-worker-face:
@@ -114,6 +116,9 @@ services:
       depends_on:
         kafka:
           condition: service_healthy
+      networks:       
+        - kce-network
+
 
   # 2. Body Worker (Pure Kafka Consumer)
   ai-worker-body:
@@ -131,17 +136,11 @@ services:
       SOURCE_TOPIC: body-tasks
       DEST_TOPIC: processed_signals
       ENABLE_GPU: "false"
-      
-    #deploy:
-    #  resources:
-    #    reservations:
-    #      devices:
-    #        - driver: nvidia
-    #          count: 1
-    #          capabilities: [gpu]
     depends_on:
       kafka:
         condition: service_healthy
+    networks:       
+        - kce-network
   
     
   ai-worker-audio:
@@ -160,8 +159,10 @@ services:
     volumes:
       - ../temp_media:/app/media
       - ../shared:/app/shared
-  # --- PRODUCER / API ---
+    networks:       
+      - kce-network
   
+    
 networks:
   kce-network:
     driver: bridge
