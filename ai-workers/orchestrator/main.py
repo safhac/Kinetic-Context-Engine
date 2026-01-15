@@ -3,18 +3,17 @@ import json
 import logging
 from kafka import KafkaConsumer
 from shared.schemas import GestureSignal, VideoProfile
-# We point to the specific logic file we are keeping
-from app.context_engine.src.deception_model import DeceptionModel
+from deception_model import DeceptionModel  # Now a local import
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("kce-brain")
 
 # Shared paths in Docker
-RESULTS_DIR = "/app/media/results"
+RESULTS_DIR = os.getenv("RESULTS_DIR", "/app/media/results")
 
 
 def main():
-    logger.info("🧠 KCE-Brain Unified starting...")
+    logger.info("🧠 KCE-Brain (Unified Orchestrator + Context) starting...")
 
     consumer = KafkaConsumer(
         "raw_signals", "video_profiles",
@@ -25,8 +24,7 @@ def main():
 
     profiles = {}
     signals = {}
-    # This replaces the entire context-engine microservice
-    engine = DeceptionModel()
+    engine = DeceptionModel()  # Initialized from local deception_model.py
 
     for msg in consumer:
         data = msg.value
@@ -41,17 +39,19 @@ def main():
         elif msg.topic == "raw_signals":
             sig = GestureSignal(**data)
 
-            # --- Scoring Logic (The "Deception Model" part) ---
+            # 1. Update the Truthfulness Score
             score = engine.analyze(sig)
-            logger.info(f"🔍 Task {task_id} | Score: {score}")
 
-            # --- VTT Logic (The "Orchestrator" part) ---
+            # 2. Update the VTT file (The "Trinity" result)
             if task_id not in signals:
                 signals[task_id] = []
             signals[task_id].append(sig)
 
             if task_id in profiles:
                 write_final_vtt(task_id, profiles[task_id], signals[task_id])
+                # Log the combined state
+                logger.info(
+                    f"📝 Task {task_id} | Signal: {sig.worker_type} | Global Score: {score}%")
 
 
 def write_final_vtt(task_id, profile, gesture_list):
@@ -65,3 +65,7 @@ def write_final_vtt(task_id, profile, gesture_list):
     output_path = os.path.join(RESULTS_DIR, f"{task_id}.vtt")
     with open(output_path, "w", encoding='utf-8') as f:
         f.write("".join(vtt_lines))
+
+
+if __name__ == "__main__":
+    main()
