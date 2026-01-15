@@ -77,12 +77,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function displaySuccess(taskId, vttUrl) {
     statusDiv.innerHTML = `✅ <strong>Analysis Complete!</strong>`;
-    statusDiv.style.color = "#00ff00"; // Hacker Green
+    statusDiv.style.color = "#00ff00";
+
+    // Get the original filename from the input
+    const originalName = document.getElementById('fileInput').files[0].name;
+    const downloadName = originalName.replace(/\.[^/.]+$/, "") + ".vtt"; // swap extension
 
     resultDiv.style.display = 'block';
     resultDiv.innerHTML = `
       <p>The KCE Brain has generated the trinity context.</p>
-      <a href="${vttUrl}" target="_blank" class="download-btn">Download VTT Subtitles</a>
+      <a href="${vttUrl}" download="${downloadName}" target="_blank" class="download-btn">Download Subtitles</a>
       <br><br>
       <small>Task ID: ${taskId}</small>
     `;
