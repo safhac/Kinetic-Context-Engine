@@ -62,12 +62,38 @@ def main():
 
 
 def write_final_vtt(task_id, profile, gesture_list):
+    # Sort by time so they appear in order
     gesture_list.sort(key=lambda x: x.timestamp)
+
     vtt_lines = ["WEBVTT\n\n"]
+
+    # CSS Style Block inside VTT (Fixes Huge Text)
+    vtt_lines.append(
+        "STYLE\n::cue {\n  font-size: 14px;\n  background-color: rgba(0, 0, 0, 0.7);\n}\n\n")
+
     for sig in gesture_list:
-        cue = sig.to_vtt_cue(profile)
-        if cue:
-            vtt_lines.append(cue)
+        # 1. Enforce Minimum Duration (The "Linger" Fix)
+        start_seconds = sig.timestamp
+        min_duration = 2.5  # Seconds
+        end_seconds = start_seconds + min_duration
+
+        # Format timestamps (HH:MM:SS.mmm)
+        def fmt(s):
+            hours = int(s // 3600)
+            minutes = int((s % 3600) // 60)
+            seconds = s % 60
+            return f"{hours:02}:{minutes:02}:{seconds:06.3f}"
+
+        # 2. Get Interpretation (The "Meaning" Fix)
+        # We assume the DeceptionModel has a translator now (see Step 2)
+        meaning = DeceptionModel().get_meaning(sig.text)
+
+        # 3. Construct the Cue
+        # We emphasize the MEANING, put raw signal in brackets
+        cue_text = f"{meaning} ({sig.text})"
+
+        vtt_lines.append(
+            f"{fmt(start_seconds)} --> {fmt(end_seconds)}\n{cue_text}\n\n")
 
     output_path = os.path.join(RESULTS_DIR, f"{task_id}.vtt")
     with open(output_path, "w", encoding='utf-8') as f:
