@@ -161,22 +161,6 @@ services:
     networks:
       - kce-network
   
-  # --- SERVICE 1: API GATEWAY (Public Facing) ---
-  api-gateway:
-    build: 
-      context: ..
-      dockerfile: api-gateway/Dockerfile
-    container_name: kce-gateway
-    ports: ["8000:8000"]
-    volumes:
-      - ../temp_media:/app/media  
-      - ../api-gateway/src:/app/src
-    environment:
-      INGESTION_SERVICE_URL: "http://ingestion-service:8000" # Direct link to Service 2
-      KAFKA_BROKER: kafka:29092 # Only needed for SSE listening (Results)
-    depends_on:
-      - kafka
-
 
 # --- REVERSE PROXY ---
   nginx:
