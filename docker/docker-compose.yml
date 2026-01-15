@@ -170,9 +170,7 @@ services:
       - "8080:8080"
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      # FIX 1: Use ../ to find the code
       - ../api-gateway/static:/usr/share/nginx/html:ro  
-      # FIX 2: Use ../ to find the media
       - ../temp_media:/usr/share/nginx/media:ro  
     depends_on:
       - ingestion-service
