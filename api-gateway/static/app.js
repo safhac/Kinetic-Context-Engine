@@ -4,7 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const statusDiv = document.getElementById('status');
   const resultDiv = document.getElementById('result');
 
-  const API_BASE = "http://localhost:8000";
+  const API_BASE = "http://localhost:8000/api";
 
   uploadBtn.addEventListener('click', async () => {
     const file = fileInput.files[0];
