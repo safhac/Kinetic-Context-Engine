@@ -5,7 +5,7 @@ from shared.schemas import GestureSignal
 
 class DeceptionModel:
     def __init__(self):
-        # --- YOUR ORIGINAL WEIGHTS (Restored) ---
+        # --- YOUR ORIGINAL WEIGHTS (PRESERVED) ---
         # 0.0 = Neutral, 1.0 = High Stress/Deception Indicator
         self.signal_weights = {
             # --- FACE (Visual) ---
@@ -13,57 +13,54 @@ class DeceptionModel:
             "lips_compressed": 0.5,
             "eyebrow_flash": 0.3,
             "eye_squint": 0.4,
-            "flushing": 0.9,       # High: Physiological response hard to fake
+            "flushing": 0.9,
             "nodding_yes": 0.1,
-            "head_down": 0.6,      # Shame/Guilt indicator
+            "head_down": 0.6,
             "confirmation_glance": 0.7,
 
             # --- BODY (Pose) ---
             "single_shrug": 0.5,
             "double_shrug": 0.4,
-            "arms_crossed": 0.2,   # Often just comfort, low weight
+            "arms_crossed": 0.2,
             "hand_raise": 0.1,
-            "steepling": -0.3,     # Confidence (reduces suspicion score)
-            "hand_on_face": 0.6,   # Cognitive load / hiding
-            "hushing": 0.7,        # Subconscious desire to stop speaking
-            "security_check": 0.5,  # Patting pockets (anxiety)
-            "foot_withdrawal": 0.6,  # Flight response
+            "steepling": -0.3,
+            "hand_on_face": 0.6,
+            "hushing": 0.7,
+            "security_check": 0.5,
+            "foot_withdrawal": 0.6,
 
             # --- AUDIO (Verbal & Paralinguistic) ---
-            "psychological_distancing": 0.8,  # "Did not" vs "Didn't"
-            "pronoun_absence": 0.5,          # "Went to store" vs "I went..."
-            "vocal_pitch_rise": 0.7,         # Physiological stress
+            "psychological_distancing": 0.8,
+            "pronoun_absence": 0.5,
+            "vocal_pitch_rise": 0.7,
             "non_contracting_statement": 0.4,
             "over_apologizing": 0.5
         }
 
-        # State State
+        # Internal Score State
         self.score = 0.0
         self.decay_rate = 0.05
 
     def analyze(self, signal: GestureSignal) -> float:
         """
-        The Bridge: Adapts the new Orchestrator call to your original logic.
+        THE BRIDGE: Connects the new Orchestrator to your original logic.
         """
         # 1. Decay the score slightly with every new event (cooling off)
         self.decay()
 
-        # 2. Normalize the input text to match dictionary keys
-        # Workers might send "Chin Thrust", we need "chin_thrust"
+        # 2. Normalize the input text to match your dictionary keys
+        # e.g., "Chin Thrust" -> "chin_thrust"
         key = signal.text.lower().replace(" ", "_")
 
-        # 3. Use your original update logic
-        # We use the AI confidence (0.0 - 1.0) as the 'intensity'
+        # 3. Call your original update logic using the AI's confidence
         new_score = self.update_score(key, intensity=signal.confidence)
 
         return new_score
 
     def update_score(self, signal_name, intensity=1.0):
-        # 1. Get Weight (default to 0.1 for unknown signals)
-        # Using partial matching keys if exact match fails
+        # 1. Get Weight (Try exact match, then substring match)
         weight = self.signal_weights.get(signal_name, 0.1)
 
-        # If direct match failed, try substring match (e.g. "strong_chin_thrust" -> "chin_thrust")
         if weight == 0.1:
             for w_key, w_val in self.signal_weights.items():
                 if w_key in signal_name:
