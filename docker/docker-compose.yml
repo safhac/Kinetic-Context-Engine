@@ -1,6 +1,61 @@
 version: '3.8'
 
 services:
+
+# 1. The New Standalone Doorway
+  nginx:
+    image: nginxinc/nginx-unprivileged:alpine
+    container_name: kce-nginx
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ../api-gateway/static:/usr/share/nginx/html:ro  
+      - ../temp_media:/usr/share/nginx/media:ro  
+    depends_on:
+      - ingestion-service
+    networks:
+      - kce-network
+
+
+  kce-brain:
+    build:
+      context: ..  # Look at KCE-Project root
+      dockerfile: ai-workers/orchestrator/Dockerfile
+    container_name: kce-orchestrator
+    environment:
+      - KAFKA_BROKER=kafka:29092
+      - RESULTS_DIR=/app/media/results
+      - PYTHONPATH=/app  # Critical for 'import shared' to work
+    volumes:
+      - ../temp_media:/app/media
+      - ../ai-workers/orchestrator/src:/app/src
+    depends_on:
+      - kafka
+    networks:
+      - kce-network
+
+
+  ingestion-service:
+    build:
+      context: ../app/ingestion-service
+      dockerfile: Dockerfile
+    ports: ["8001:8001"]
+    volumes:
+      - ../temp_media:/app/media  # Shared Video Storage
+      - ../app/ingestion-service/src:/app/src  # <--- ADD THIS LINE
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      KAFKA_BROKER: kafka:29092
+      KAFKA_TOPIC_FACE: face-tasks
+      KAFKA_TOPIC_BODY: body-tasks
+      KAFKA_TOPIC_AUDIO: audio-tasks
+
+
   # --- INFRASTRUCTURE ---
   kafka:
     image: confluentinc/cp-kafka:latest
@@ -31,6 +86,7 @@ services:
       timeout: 10s
       retries: 3
 
+
   redis:
     image: redis:alpine
     container_name: kce-redis
@@ -40,7 +96,6 @@ services:
       TZ: Asia/Jerusalem
 
   # --- CONSUMERS ---
-  
   # 1. Telemetry Consumer (Kafka)
   context-engine:
     build:
@@ -124,58 +179,6 @@ services:
       - ../shared:/app/shared
   # --- PRODUCER / API ---
   
-  ingestion-service:
-    build:
-      context: ../app/ingestion-service
-      dockerfile: Dockerfile
-    ports: ["8001:8001"]
-    volumes:
-      - ../temp_media:/app/media  # Shared Video Storage
-      - ../app/ingestion-service/src:/app/src  # <--- ADD THIS LINE
-    depends_on:
-      kafka:
-        condition: service_healthy
-      redis:
-        condition: service_started
-    environment:
-      KAFKA_BROKER: kafka:29092
-      KAFKA_TOPIC_FACE: face-tasks
-      KAFKA_TOPIC_BODY: body-tasks
-      KAFKA_TOPIC_AUDIO: audio-tasks
-
-  
-  kce-brain:
-    build:
-      context: ..  # Look at KCE-Project root
-      dockerfile: ai-workers/orchestrator/Dockerfile
-    container_name: kce-orchestrator
-    environment:
-      - KAFKA_BROKER=kafka:29092
-      - RESULTS_DIR=/app/media/results
-      - PYTHONPATH=/app  # Critical for 'import shared' to work
-    volumes:
-      - ../temp_media:/app/media
-      - ../ai-workers/orchestrator/src:/app/src
-    depends_on:
-      - kafka
-    networks:
-      - kce-network
-  
-
-# --- REVERSE PROXY ---
-  nginx:
-    image: nginxinc/nginx-unprivileged:alpine
-    container_name: kce-nginx
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ../api-gateway/static:/usr/share/nginx/html:ro  
-      - ../temp_media:/usr/share/nginx/media:ro  
-    depends_on:
-      - ingestion-service
-
-
 networks:
   kce-network:
     driver: bridge
