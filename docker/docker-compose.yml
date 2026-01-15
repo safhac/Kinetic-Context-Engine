@@ -144,7 +144,7 @@ services:
       KAFKA_TOPIC_AUDIO: audio-tasks
 
   
-  orchestrator:
+  kce-brain:
     build:
       context: ..  # Look at KCE-Project root
       dockerfile: ai-workers/orchestrator/Dockerfile
